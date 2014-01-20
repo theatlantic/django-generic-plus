@@ -1,0 +1,12 @@
+{% load i18n adminmedia %}
+
+<input type="hidden" id="{{ final_attrs.id }}-0-id" name="{{ final_attrs.name }}-0-id" value="{{ final_attrs.value }}"/>
+<input type="text"
+       id="{{ final_attrs.id }}"
+       name="{{ final_attrs.name }}"
+       value="{{ file_value }}"
+       class="genericplus-data-field genericplus-file-field"
+       data-upload-to="{{ upload_to }}"
+       data-prefix="{{ prefix }}"/>
+
+{% include "generic_plus/inline.html" %}
