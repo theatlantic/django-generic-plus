@@ -26,6 +26,38 @@ def patch_model_form():
         else:
             return BoundField(self, field, name)
 
+    # Patch to form_utils, if installed
+    try:
+        import form_utils.forms
+    except ImportError:
+        pass
+    else:
+        @monkeypatch(form_utils.forms.FieldsetCollection)
+        def _gather_fieldsets(old_func, self):
+            if not self.fieldsets:
+                self.fieldsets = (('main', {
+                    'fields': self.form.fields.keys(),
+                    'legend': '',
+                }),)
+            for name, options in self.fieldsets:
+                if 'fields' not in options:
+                    raise ValueError("Fieldset definition must include 'fields' option." )
+                boundfields = []
+                for name in options['fields']:
+                    if name not in self.form.fields:
+                        continue
+                    field = self.form.fields[name]
+                    if isinstance(field, GenericForeignFileFormField):
+                        bf = GenericForeignFileBoundField(self.form, field, name)
+                    else:
+                        bf = BoundField(self.form, field, name)
+                    boundfields.append(bf)
+
+                self._cached_fieldsets.append(
+                    form_utils.forms.Fieldset(self.form, name, boundfields,
+                        legend=options.get('legend', None), 
+                        classes=' '.join(options.get('classes', ())),
+                        description=options.get('description', '')))
 
 def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=None):
     from generic_plus.fields import GenericForeignFileField
