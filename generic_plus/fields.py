@@ -47,6 +47,7 @@ class GenericForeignFileField(GenericRelation):
     file_descriptor = None
 
     file_descriptor_cls = FileDescriptor
+    file_field_cls = models.FileField
     rel_file_field_name = 'file'
 
     def __init__(self, to, rel_file_field_name=None, **kwargs):
@@ -95,12 +96,14 @@ class GenericForeignFileField(GenericRelation):
 
         self.file_kwargs['db_column'] = kwargs.get('db_column', self.name)
 
-    def contribute_to_related_class(self, cls, related):
-        super(GenericForeignFileField, self).contribute_to_related_class(cls, related)
-        rel_file_field = self.rel.to._meta.get_field(self.rel_file_field_name)
-        self.file_field_cls = rel_file_field.__class__
-        self.file_descriptor_cls = rel_file_field.descriptor_class
-        if not isinstance(rel_file_field, models.ImageField):
+    def contribute_to_class(self, cls, name):
+        self.generic_rel_name = '%s_generic_rel' % name
+        self.raw_file_field_name = '%s_raw' % name
+        self.file_field_name = name
+        # Save a reference to which model this class is on for future use
+        self.model = cls
+        super(GenericRelation, self).contribute_to_class(cls, name)
+        if not isinstance(self.file_field_cls, models.ImageField):
             del self.file_kwargs['width_field']
             del self.file_kwargs['height_field']
         else:
@@ -108,15 +111,6 @@ class GenericForeignFileField(GenericRelation):
                 del self.file_kwargs['width_field']
             if not self.file_kwargs['height_field']:
                 del self.file_kwargs['height_field']
-
-    def contribute_to_class(self, cls, name):
-        self.generic_rel_name = '%s_generic_rel' % name
-        self.raw_file_field_name = '%s_raw' % name
-        super(GenericRelation, self).contribute_to_class(cls, name)
-        self.file_field_name = name
-
-        # Save a reference to which model this class is on for future use
-        self.model = cls
 
         self.__dict__['file_field'] = self.file_field_cls(**self.file_kwargs)
         ### HACK: manually fix creation counter
@@ -581,3 +575,23 @@ def create_generic_related_manager(superclass):
         create.alters_data = True
 
     return GenericRelatedObjectManager
+
+
+try:
+    from south.modelsinspector import add_introspection_rules
+except ImportError:
+    pass
+else:
+    add_introspection_rules(rules=[
+        (
+            (GenericForeignFileField,),
+            [],
+            {
+                "to": ["rel.to", {}],
+                "symmetrical": ["rel.symmetrical", {"default": True}],
+                "object_id_field": ["object_id_field_name", {"default": "object_id"}],
+                "content_type_field": ["content_type_field_name", {"default": "content_type"}],
+                "blank": ["blank", {"default": True}],
+            },
+        ),
+    ], patterns=["^generic_plus\.fields\.GenericForeignFileField"])

@@ -67,7 +67,7 @@ class GenericForeignFileWidget(Input):
         if file_value and file_value.startswith(settings.MEDIA_ROOT):
             file_value = re.sub(r'^%s/?' % re.compile(settings.MEDIA_ROOT), '', file_value)
 
-        if isinstance(obj, rel_model) and not getattr(obj, self.field.rel_file_field_name) and file_value:
+        if rel_model and isinstance(obj, rel_model) and not getattr(obj, self.field.rel_file_field_name) and file_value:
             setattr(obj, self.field.rel_file_field_name, file_value)
 
         if value and obj is None and rel_model:
