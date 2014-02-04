@@ -104,8 +104,8 @@ class GenericForeignFileField(GenericRelation):
         self.model = cls
         super(GenericRelation, self).contribute_to_class(cls, name)
         if not isinstance(self.file_field_cls, models.ImageField):
-            del self.file_kwargs['width_field']
-            del self.file_kwargs['height_field']
+            self.file_kwargs.pop('width_field', None)
+            self.file_kwargs.pop('height_field', None)
         else:
             if not self.file_kwargs['width_field']:
                 del self.file_kwargs['width_field']
