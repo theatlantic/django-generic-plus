@@ -1,6 +1,6 @@
 import re
 
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.forms.widgets import Input
 from django.conf import settings
 from django.contrib.admin import helpers
@@ -38,19 +38,20 @@ class GenericForeignFileWidget(Input):
                 file_value = getattr(obj, self.field.name).name
             value = getattr(obj, 'pk', None)
         elif rel_model and isinstance(value, basestring) and not value.isdigit():
-            qset_kwargs = {
-                self.field.rel_file_field_name: value,
-            }
             try:
-                obj = rel_model.objects.get(**qset_kwargs)
+                obj = rel_model.objects.get(**{self.field.rel_file_field_name: value})
             except ObjectDoesNotExist:
                 obj = None
                 file_value = value
                 value = None
+            except MultipleObjectsReturned:
+                file_value = value
+                if bound_field and getattr(bound_field, 'form', None):
+                    value = bound_field.form.data.get("%s-0-id" % name)
             else:
                 file_value = value
                 value = obj.pk
-        elif rel_model and isinstance(value, (long, int)) or (isinstance(value, basestring) and value.isdigit()):
+        if rel_model and isinstance(value, (long, int)) or (isinstance(value, basestring) and value.isdigit()):
             try:
                 obj = rel_model.objects.get(pk=value)
             except ObjectDoesNotExist:
