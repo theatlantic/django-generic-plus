@@ -167,6 +167,52 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
         else:
             return super(BaseGenericFileInlineFormSet, cls).get_default_prefix()
 
+    def save_existing_objects(self, commit=True):
+        """
+        Identical to the parent method, except for the try/except ValidationError
+        logic inside the self.initial_forms for loop.
+        """
+        self.changed_objects = []
+        self.deleted_objects = []
+        if not self.initial_forms:
+            return []
+
+        saved_instances = []
+
+        for form in self.initial_forms:
+            pk_name = self._pk_field.name
+            raw_pk_value = form._raw_value(pk_name)
+
+            # clean() for different types of PK fields can sometimes return
+            # the model instance, and sometimes the PK. Handle either.
+            try:
+                pk_value = form.fields[pk_name].clean(raw_pk_value)
+            except forms.ValidationError:
+                # If a ValidationError was caused by a DoesNotExist error,
+                # this means that the object was deleted in another formset's
+                # save (e.g., if a generic foreign file field inline was attached
+                # to another inline, in a nested fashion)
+                try:
+                    pk_value = self.model.objects.get(**{pk_name: raw_pk_value})
+                except self.model.DoesNotExist:
+                    continue
+                else:
+                    raise
+
+            pk_value = getattr(pk_value, 'pk', pk_value)
+
+            obj = self._existing_object(pk_value)
+            if self.can_delete and self._should_delete_form(form):
+                self.deleted_objects.append(obj)
+                obj.delete()
+                continue
+            if form.has_changed():
+                self.changed_objects.append((obj, form.changed_data))
+                saved_instances.append(self.save_existing(form, obj, commit=commit))
+                if not commit:
+                    self.saved_forms.append(form)
+        return saved_instances
+
 
 def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFormSet,
         form_attrs=None, formset_attrs=None, formfield_callback=None, prefix=None):

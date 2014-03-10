@@ -84,6 +84,7 @@ def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=Non
             model = self.model
 
         generic_fk_fields = get_generic_fk_file_fields_for_model(model)
+
         if len(generic_fk_fields):
             # ModelAdmin.inlines is defined as a mutable on that
             # class, so we need to copy it before we append.
@@ -94,9 +95,13 @@ def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=Non
                 self.inlines = list(inlines)
             else:
                 self.inlines = []
-        for field in generic_fk_fields:
-            InlineFormSet = field.get_inline_admin_formset()
-            self.inlines.append(InlineFormSet)
+
+            # Prevent duplicate inlines being added
+            existing_inline_fields = filter(None, [getattr(i, 'field', None) for i in self.inlines])
+            generic_fk_fields_to_add = set(generic_fk_fields) ^ set(existing_inline_fields)
+
+            for field in generic_fk_fields_to_add:
+                self.inlines.append(field.get_inline_admin_formset())
 
         old_init(self, *args, **kwargs)
 
