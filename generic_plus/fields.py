@@ -2,6 +2,9 @@
 Defines GenericForeignFileField, a subclass of GenericRelation from
 django.contrib.contenttypes.
 """
+from operator import attrgetter
+
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.generic import GenericInlineModelAdmin
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import File
@@ -100,6 +103,7 @@ class GenericForeignFileField(GenericRelation):
         self.generic_rel_name = '%s_generic_rel' % name
         self.raw_file_field_name = '%s_raw' % name
         self.file_field_name = name
+
         # Save a reference to which model this class is on for future use
         self.model = cls
         super(GenericRelation, self).contribute_to_class(cls, name)
@@ -138,6 +142,16 @@ class GenericForeignFileField(GenericRelation):
             'generic_field': getattr(cls, self.generic_rel_name),
         })
         setattr(cls, self.raw_file_field_name, self.file_descriptor_cls(self.file_field))
+
+    def is_cached(self, instance):
+        return hasattr(instance, self.get_cache_name())
+
+    def get_prefetch_query_set(self, instances):
+        return (self.bulk_related_objects(instances),
+            attrgetter(self.object_id_field_name),
+            lambda obj: obj._get_pk_val(),
+            True,
+            self.attname)
 
     def south_init(self):
         """
@@ -310,58 +324,54 @@ class GenericForeignFileDescriptor(object):
 
     def __get__(self, instance, instance_type=None):
         if instance is None:
-            if self.is_file_field:
-                return self.file_field
-            else:
-                return self.field
+            return self.field
 
         cache_name = self.field.get_cache_name()
         file_val = None
 
-        try:
-            if self.is_file_field:
-                file_val = instance.__dict__[self.file_field.name]
-                raise AttributeError("Lookup related field")
-            else:
-                return getattr(instance, cache_name)
-        except AttributeError:
-            # This import is done here to avoid circular import importing this module
-            from django.contrib.contenttypes.models import ContentType
+        if self.is_file_field:
+            file_val = instance.__dict__[self.file_field.name]
 
-            # Dynamically create a class that subclasses the related model's
-            # default manager.
-            rel_model = self.field.rel.to
-            superclass = rel_model._default_manager.__class__
-            RelatedManager = create_generic_related_manager(superclass)
+        # Dynamically create a class that subclasses the related model's
+        # default manager.
+        rel_model = self.field.rel.to
+        superclass = rel_model._default_manager.__class__
+        RelatedManager = create_generic_related_manager(superclass)
 
-            qn = connection.ops.quote_name
+        qn = connection.ops.quote_name
 
-            if hasattr(instance._default_manager, 'prefetch_related'):
-                # Django 1.4+
-                manager_kwargs = {
-                    'prefetch_cache_name': self.field.attname,
-                }
-            else:
-                # Django <= 1.3
-                manager_kwargs = {
-                    'join_table': qn(self.field.m2m_db_table()),
-                }
+        if hasattr(instance._default_manager, 'prefetch_related'):
+            # Django 1.4+
+            manager_kwargs = {
+                'prefetch_cache_name': self.field.attname,
+            }
+        else:
+            # Django <= 1.3
+            manager_kwargs = {
+                'join_table': qn(self.field.m2m_db_table()),
+            }
 
-            manager = RelatedManager(
-                model=rel_model,
-                instance=instance,
-                field=self.field,
-                symmetrical=(self.field.rel.symmetrical and instance.__class__ == rel_model),
-                source_col_name=qn(self.field.m2m_column_name()),
-                target_col_name=qn(self.field.m2m_reverse_name()),
-                content_type=ContentType.objects.db_manager(instance._state.db).get_for_model(instance),
-                content_type_field_name=self.field.content_type_field_name,
-                object_id_field_name=self.field.object_id_field_name,
-                **manager_kwargs)
+        manager = RelatedManager(
+            model=rel_model,
+            instance=instance,
+            field=self.field,
+            symmetrical=(self.field.rel.symmetrical and instance.__class__ == rel_model),
+            source_col_name=qn(self.field.m2m_column_name()),
+            target_col_name=qn(self.field.m2m_reverse_name()),
+            content_type=ContentType.objects.db_manager(instance._state.db).get_for_model(instance),
+            content_type_field_name=self.field.content_type_field_name,
+            object_id_field_name=self.field.object_id_field_name,
+            **manager_kwargs)
 
-            if not manager.pk_val:
-                val = None
-            else:
+        if not manager.pk_val:
+            val = None
+        else:
+            if not self.is_file_field:
+                return manager
+
+            try:
+                val = getattr(instance, cache_name)
+            except AttributeError:
                 db = manager._db or router.db_for_read(rel_model, instance=instance)
                 query = manager.core_filters or {
                     '%s__pk' % manager.content_type_field_name: manager.content_type.id,
@@ -385,12 +395,8 @@ class GenericForeignFileDescriptor(object):
                         return None
                     val = None
 
-            if val:
-                setattr(instance, cache_name, manager)
-                if not self.is_file_field:
-                    return manager
-
         self.set_file_value(instance, file_val, obj=val)
+        setattr(instance, self.field.get_cache_name(), val)
         return instance.__dict__[self.file_field.name]
 
     def set_file_value(self, instance, value, obj=None):
@@ -406,6 +412,11 @@ class GenericForeignFileDescriptor(object):
         # object understands how to convert a path to a file, and also how to
         # handle None.
         attr_cls = self.file_field.attr_class
+
+        if isinstance(value, self.field.rel.to):
+            obj = value
+            value = getattr(obj, self.field.rel_file_field_name)
+
         if isinstance(value, basestring) or value is None:
             attr = attr_cls(instance, self.file_field, value)
             attr.related_object = obj
@@ -435,6 +446,10 @@ class GenericForeignFileDescriptor(object):
     def __set__(self, instance, value):
         if instance is None:
             raise AttributeError("Manager must be accessed via instance")
+
+        if isinstance(value, self.field.rel.to) or value is None:
+            setattr(instance, self.field.get_cache_name(), value)
+
         if self.is_file_field:
             self.set_file_value(instance, value)
         else:
@@ -450,10 +465,10 @@ class GenericForeignFileDescriptor(object):
             else:
                 for obj in value:
                     field_value = getattr(obj, self.field.file_field_name)
-
                     file_val = field_value.path if field_value else None
                     setattr(instance, self.field.file_field_name, file_val)
                     manager.add(obj)
+                    setattr(instance, self.field.get_cache_name(), value)
 
 
 def create_generic_related_manager(superclass):
@@ -509,7 +524,6 @@ def create_generic_related_manager(superclass):
             return superclass.get_query_set(self).using(db).filter(**query)
 
         def get_prefetch_query_set(self, instances):
-            from operator import attrgetter
             db = self._db or router.db_for_read(self.model, instance=instances[0])
             query = {
                 ('%s__pk' % self.content_type_field_name): self.content_type.id,
