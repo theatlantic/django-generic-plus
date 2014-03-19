@@ -23,7 +23,7 @@ class GenericForeignFileBoundField(BoundField):
         value = self.value()
         use_file_field = False
         if form.is_bound and isinstance(value, basestring) and not value.isdigit():
-            formset_total_count_name = u'%s-%s' % (name, forms.formsets.TOTAL_FORM_COUNT)
+            formset_total_count_name = u'%s-%s' % (form.add_prefix(name), forms.formsets.TOTAL_FORM_COUNT)
             if formset_total_count_name not in form.data:
                 use_file_field = True
         # If the FieldFile has a filename, but no corresponding

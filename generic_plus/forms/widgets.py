@@ -47,7 +47,7 @@ class GenericForeignFileWidget(Input):
             except MultipleObjectsReturned:
                 file_value = value
                 if bound_field and getattr(bound_field, 'form', None):
-                    value = bound_field.form.data.get("%s-0-id" % name)
+                    value = bound_field.form.data.get("%s-0-id" % bound_field.form.add_prefix(name))
             else:
                 file_value = value
                 value = obj.pk
