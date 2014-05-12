@@ -285,9 +285,10 @@ class GenericForeignFileField(GenericRelation):
             max_num = 1
 
             if not attrs.get('get_formset'):
-                def get_formset(self, request, obj=None):
+                def get_formset(self, request, obj=None, **kwargs):
                     formset = generic_fk_file_formset_factory(
                         formset=formset_cls,
+                        formset_attrs=kwargs,
                         field=self.field,
                         prefix=self.default_prefix,
                         formfield_callback=curry(self.formfield_for_dbfield, request=request))
