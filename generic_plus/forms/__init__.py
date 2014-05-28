@@ -6,6 +6,12 @@ from django.core.files.uploadedfile import UploadedFile
 from django.db import models
 from django.db.models.fields.files import FieldFile
 from django.forms.forms import BoundField
+
+try:
+    from django.forms.formsets import DEFAULT_MAX_NUM
+except ImportError:
+    DEFAULT_MAX_NUM = 1000
+
 from django.forms.models import ModelFormMetaclass
 from django.core.exceptions import ValidationError
 
@@ -260,6 +266,8 @@ def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFor
         '__module__': formset.__module__,
         'prefix_override': prefix,
         'default_prefix': prefix,
+        'max_num': DEFAULT_MAX_NUM,
+        'absolute_max': max(DEFAULT_MAX_NUM, (formset_attrs or {}).get('max_num') or 0),
     }
     inline_formset_attrs.update(formset_attrs or {})
 
