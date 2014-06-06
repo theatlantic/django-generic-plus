@@ -52,13 +52,14 @@ class GenericForeignFileWidget(Input):
                 file_value = value
                 value = obj.pk
         if rel_model and isinstance(value, (long, int)) or (isinstance(value, basestring) and value.isdigit()):
-            try:
-                obj = rel_model.objects.get(pk=value)
-            except ObjectDoesNotExist:
-                pass
-            else:
-                if getattr(obj, self.field.rel_file_field_name):
-                    file_value = getattr(obj, self.field.rel_file_field_name).name
+            if not obj or not file_value:
+                try:
+                    obj = rel_model.objects.get(pk=value)
+                except ObjectDoesNotExist:
+                    pass
+                else:
+                    if getattr(obj, self.field.rel_file_field_name):
+                        file_value = getattr(obj, self.field.rel_file_field_name).name
         else:
             obj = value
             try:
