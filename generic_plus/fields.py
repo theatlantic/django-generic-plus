@@ -395,8 +395,8 @@ class GenericForeignFileDescriptor(object):
                         return None
                     val = None
 
-        self.set_file_value(instance, file_val, obj=val)
-        setattr(instance, self.field.get_cache_name(), val)
+            self.set_file_value(instance, file_val, obj=val)
+            setattr(instance, self.field.get_cache_name(), val)
         return instance.__dict__[self.file_field.name]
 
     def set_file_value(self, instance, value, obj=None):
