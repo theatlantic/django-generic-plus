@@ -12,9 +12,9 @@ class PandocRSTConverter(object):
         # Remove lists with internal links (effectively, the TOC in a README).
         # We remove the TOC because the anchors in a github markdown file
         # are broken when the rst is displayed on pypi
-        (re.compile(ur'(?ms)^\-  ((?:.(?!\n[\n\-]))*?\`__\n)'), u''),
+        (re.compile(r'(?ms)^\-  ((?:.(?!\n[\n\-]))*?\`__\n)'), ''),
         # (shorten link terminator from two underscores to one): `__ => `_
-        (re.compile(ur'\`__'), u'`_'),
+        (re.compile(r'\`__'), '`_'),
         # Replace, for example:
         #
         #     code sample:
@@ -28,11 +28,11 @@ class PandocRSTConverter(object):
         #    code sample::
         #
         #        def example(): pass
-        (re.compile(ur'(?ms)(\:)\n\n\:(\:\n\n)'), ur'\1\2'),
+        (re.compile(r'(?ms)(\:)\n\n\:(\:\n\n)'), r'\1\2'),
         # replace 3+ line breaks with 2
-        (re.compile(ur'\n\n\n+'), u'\n\n'),
+        (re.compile(r'\n\n\n+'), '\n\n'),
         # Remove syntax highlighting hints, which don't work on pypi
-        (re.compile(ur'(?m)\.\. code\:\: .*$'), u'::'),
+        (re.compile(r'(?m)\.\. code\:\: .*$'), '::'),
     )
 
     from_format = 'markdown'
@@ -76,14 +76,14 @@ class PandocRSTConverter(object):
 
     def replace_section(self, rst, section_name, replacement, remove_header=False):
         if not len(replacement):
-            replacement = u"\n"
-        elif replacement[-1] != u"\n":
-            replacement = u"%s\n" % replacement
+            replacement = "\n"
+        elif replacement[-1] != "\n":
+            replacement = "%s\n" % replacement
         if remove_header:
-            replacement = u"%s\n" % replacement
+            replacement = "%s\n" % replacement
         else:
-            replacement = u"\\1\n%s\n" % replacement
-        regex = (ur"""(?msx)
+            replacement = "\\1\n%s\n" % replacement
+        regex = (r"""(?msx)
         (\n
             %(section_name)s\n
             ([%(header_chars)s])\2[^\n]+\n

@@ -1,3 +1,7 @@
+import six
+
+from six.moves import filter
+
 from types import ModuleType
 import functools
 import inspect
@@ -54,7 +58,7 @@ def monkeypatch(func=None, obj=None, name=None, avoid_doublewrap=True):
         call = getattr(obj, name)
     except AttributeError:
         raise TypeError("%(func_repr)s does not exist" % {
-            'func_repr': u'.'.join(
+            'func_repr': '.'.join(
                 filter(None, [
                     getattr(obj, '__module__', None),
                     obj.__name__,
@@ -67,9 +71,12 @@ def monkeypatch(func=None, obj=None, name=None, avoid_doublewrap=True):
         return
 
     # get underlying function (if any), and anyway def the wrapper closure
-    original_callable = getattr(call, 'im_func', call)
+    try:
+        original_callable = six.get_method_function(call)
+    except AttributeError:
+        original_callable = call
 
-    @functools.wraps(func)
+    @six.wraps(func)
     def wrapper(*args, **kwargs):
         return func(original_callable, *args, **kwargs)
 
@@ -77,8 +84,8 @@ def monkeypatch(func=None, obj=None, name=None, avoid_doublewrap=True):
     wrapper.original = call
     wrapper.wrapper = func
 
-    # rewrap staticmethod and classmethod specifically (iff obj is a class)
-    if inspect.isclass(obj):
+    if six.PY2 and inspect.isclass(obj):
+        # rewrap staticmethod and classmethod specifically (iff obj is a class)
         if hasattr(call, 'im_self'):
             if call.im_self:
                 wrapper = classmethod(wrapper)

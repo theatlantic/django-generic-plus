@@ -20,7 +20,9 @@ except IOError:
 setup(
     name='django-generic-plus',
     version="1.0.9",
-    install_requires=[],
+    install_requires=[
+        'six>=1.7.0',
+    ],
     description="Django model field that combines the functionality of "
                 "GenericForeignKey and FileField",
     author='The Atlantic',

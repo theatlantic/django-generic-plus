@@ -1,3 +1,5 @@
+from six.moves import filter
+
 import collections
 from .utils import monkeypatch
 

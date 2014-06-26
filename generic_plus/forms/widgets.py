@@ -1,3 +1,5 @@
+import six
+
 import re
 
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
@@ -37,7 +39,7 @@ class GenericForeignFileWidget(Input):
             if file_value.startswith('/') and getattr(obj, self.field.name):
                 file_value = getattr(obj, self.field.name).name
             value = getattr(obj, 'pk', None)
-        elif rel_model and isinstance(value, basestring) and not value.isdigit():
+        elif rel_model and isinstance(value, six.string_types) and not value.isdigit():
             try:
                 obj = rel_model.objects.get(**{self.field.rel_file_field_name: value})
             except ObjectDoesNotExist:
@@ -51,7 +53,7 @@ class GenericForeignFileWidget(Input):
             else:
                 file_value = value
                 value = obj.pk
-        if rel_model and isinstance(value, (long, int)) or (isinstance(value, basestring) and value.isdigit()):
+        if rel_model and isinstance(value, six.integer_types) or (isinstance(value, six.string_types) and value.isdigit()):
             if not obj or not file_value:
                 try:
                     obj = rel_model.objects.get(pk=value)
@@ -75,7 +77,7 @@ class GenericForeignFileWidget(Input):
         if value and obj is None and rel_model:
             obj = rel_model.objects.get(pk=value)
 
-        final_attrs['value'] = value or u''
+        final_attrs['value'] = value or ''
 
         formset = self.get_inline_admin_formset(name, value, instance=obj, bound_field=bound_field)
 
@@ -96,7 +98,7 @@ class GenericForeignFileWidget(Input):
         # render this widget we would have duplicate inlines, so we check for
         # this condition and return.
         if name.endswith('-id'):
-            return u""
+            return ""
 
         ctx = self.get_context_data(name, value, attrs, bound_field)
         return render_to_string(self.template, ctx)
