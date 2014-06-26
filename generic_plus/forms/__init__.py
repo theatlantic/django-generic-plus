@@ -1,3 +1,7 @@
+import six
+
+from six.moves import xrange
+
 from django import forms
 from django.contrib.admin.widgets import AdminFileWidget
 from django.contrib.contenttypes.generic import BaseGenericInlineFormSet
@@ -28,8 +32,8 @@ class GenericForeignFileBoundField(BoundField):
         self.db_file_field = getattr(db_field, 'file_field', None)
         value = self.value()
         use_file_field = False
-        if form.is_bound and isinstance(value, basestring) and not value.isdigit():
-            formset_total_count_name = u'%s-%s' % (form.add_prefix(name), forms.formsets.TOTAL_FORM_COUNT)
+        if form.is_bound and isinstance(value, six.string_types) and not value.isdigit():
+            formset_total_count_name = '%s-%s' % (form.add_prefix(name), forms.formsets.TOTAL_FORM_COUNT)
             if formset_total_count_name not in form.data:
                 use_file_field = True
         # If the FieldFile has a filename, but no corresponding
@@ -59,7 +63,7 @@ class GenericForeignFileBoundField(BoundField):
         val = super(GenericForeignFileBoundField, self).value()
         if not self.db_file_field or not getattr(self.form, 'instance', None):
             return val
-        if isinstance(self.field, forms.FileField) and isinstance(val, basestring):
+        if isinstance(self.field, forms.FileField) and isinstance(val, six.string_types):
             val = self.db_file_field.attr_class(self.form.instance, self.db_file_field, val)
         return val
 
@@ -102,11 +106,11 @@ class GenericForeignFileFormField(forms.Field):
         if isinstance(value, UploadedFile):
             return value
 
-        if isinstance(value, basestring) and not value.isdigit():
+        if isinstance(value, six.string_types) and not value.isdigit():
             return value
 
         try:
-            value = int(str(value))
+            value = int(six.text_type(value))
         except (ValueError, TypeError):
             raise ValidationError(self.error_messages['invalid'])
         return value

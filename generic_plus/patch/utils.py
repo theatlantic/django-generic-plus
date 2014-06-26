@@ -1,3 +1,7 @@
+import six
+
+from six.moves import filter
+
 from types import ModuleType
 import functools
 import inspect
@@ -54,7 +58,7 @@ def monkeypatch(func=None, obj=None, name=None, avoid_doublewrap=True):
         call = getattr(obj, name)
     except AttributeError:
         raise TypeError("%(func_repr)s does not exist" % {
-            'func_repr': u'.'.join(
+            'func_repr': '.'.join(
                 filter(None, [
                     getattr(obj, '__module__', None),
                     obj.__name__,
@@ -69,7 +73,7 @@ def monkeypatch(func=None, obj=None, name=None, avoid_doublewrap=True):
     # get underlying function (if any), and anyway def the wrapper closure
     original_callable = getattr(call, 'im_func', call)
 
-    @functools.wraps(func)
+    @six.wraps(func)
     def wrapper(*args, **kwargs):
         return func(original_callable, *args, **kwargs)
 
