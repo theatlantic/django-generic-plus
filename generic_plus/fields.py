@@ -4,6 +4,7 @@ django.contrib.contenttypes.
 """
 import six
 
+import inspect
 from operator import attrgetter
 
 from django.contrib.contenttypes.models import ContentType
@@ -12,9 +13,24 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import File
 from django.core.files.uploadedfile import UploadedFile
 from django.db import connection, router, models
+from django.db.models.deletion import DO_NOTHING
 from django.db.models.fields.files import FieldFile, FileDescriptor
+from django.db.models.fields.related import RelatedField, Field, ManyToOneRel
 from django.contrib.contenttypes.generic import GenericRelation, GenericRel
 from django.utils.functional import curry
+
+try:
+    from django.db.models.fields.related import ForeignObject, ForeignObjectRel
+except ImportError:
+    # Django <= 1.5
+    class ForeignObject(RelatedField, Field):
+        pass
+
+    class ForeignObjectRel(ManyToOneRel):
+        def __init__(self, field, to, **kwargs):
+            self.related_query_name = kwargs.pop('related_query_name', None)
+            self.field = field
+            super(ForeignObjectRel, self).__init__(to, self.field.name, **kwargs)
 
 from generic_plus.forms import (
     generic_fk_file_formfield_factory, generic_fk_file_widget_factory)
@@ -81,14 +97,26 @@ class GenericForeignFileField(GenericRelation):
             'height_field': kwargs.pop('height_field', None),
         }
 
-        kwargs['rel'] = GenericRel(to,
-                            related_name=kwargs.pop('related_name', None),
-                            limit_choices_to=kwargs.pop('limit_choices_to', None),
-                            symmetrical=kwargs.pop('symmetrical', True))
+        symmetrical = kwargs.pop('symmetrical', True)
+
+        if issubclass(GenericRel, ForeignObjectRel):
+            # Django 1.6
+            kwargs['rel'] = GenericRel(self, to,
+                related_name=kwargs.pop('related_name', None),
+                limit_choices_to=kwargs.pop('limit_choices_to', None))
+            kwargs['rel'].on_delete = DO_NOTHING
+        else:
+            # Django <= 1.5
+            kwargs['rel'] = GenericRel(to,
+                                related_name=kwargs.pop('related_name', None),
+                                limit_choices_to=kwargs.pop('limit_choices_to', None),
+                                symmetrical=symmetrical)
 
         # Override content-type/object-id field names on the related class
         self.object_id_field_name = kwargs.pop("object_id_field", "object_id")
         self.content_type_field_name = kwargs.pop("content_type_field", "content_type")
+
+        self.for_concrete_model = kwargs.pop("for_concrete_model", True)
 
         kwargs.update({
             'blank': True,
@@ -97,7 +125,14 @@ class GenericForeignFileField(GenericRelation):
             'max_length': self.file_kwargs['max_length'],
         })
 
-        models.Field.__init__(self, **kwargs)
+        if isinstance(self, ForeignObject):
+            # Django 1.6
+            super(GenericRelation, self).__init__(
+                to, to_fields=[],
+                from_fields=[self.object_id_field_name], **kwargs)
+        else:
+            # Django <= 1.5
+            models.Field.__init__(self, **kwargs)
 
         self.file_kwargs['db_column'] = kwargs.get('db_column', self.name)
 
@@ -108,7 +143,16 @@ class GenericForeignFileField(GenericRelation):
 
         # Save a reference to which model this class is on for future use
         self.model = cls
+
+        contribute_to_class_args = inspect.getargspec(
+                models.Field.contribute_to_class).args
+
+        if 'virtual_only' in contribute_to_class_args:
+            # Django 1.6+
+            cls._meta.add_virtual_field(self)
+
         super(GenericRelation, self).contribute_to_class(cls, name)
+
         if not isinstance(self.file_field_cls, models.ImageField):
             self.file_kwargs.pop('width_field', None)
             self.file_kwargs.pop('height_field', None)
@@ -319,10 +363,11 @@ class GenericForeignFileField(GenericRelation):
 
 class GenericForeignFileDescriptor(object):
 
-    def __init__(self, field, file_field, is_file_field=False):
+    def __init__(self, field, file_field, is_file_field=False, for_concrete_model=True):
         self.field = field
         self.file_field = file_field
         self.is_file_field = is_file_field
+        self.for_concrete_model = for_concrete_model
 
     def __get__(self, instance, instance_type=None):
         if instance is None:
@@ -353,14 +398,32 @@ class GenericForeignFileDescriptor(object):
                 'join_table': qn(self.field.m2m_db_table()),
             }
 
+        if hasattr(self.field.rel, 'symmetrical'):
+            # Django <= 1.5
+            manager_kwargs['symmetrical'] = (self.field.rel.symmetrical and instance.__class__ == rel_model)
+
+        if hasattr(self.field, 'get_joining_columns'):
+            join_cols = self.field.get_joining_columns(reverse_join=True)[0]
+        else:
+            join_cols = [self.field.m2m_column_name(), self.field.m2m_reverse_name()]
+
+        ct_manager = ContentType.objects.db_manager(instance._state.db)
+        try:
+            content_type = ct_manager.get_for_model(instance, for_concrete_model=self.for_concrete_model)
+        except TypeError:
+            # Django <= 1.5
+            if not self.for_concrete_model:
+                raise
+            else:
+                content_type = ct_manager.get_for_model(instance)
+
         manager = RelatedManager(
             model=rel_model,
             instance=instance,
             field=self.field,
-            symmetrical=(self.field.rel.symmetrical and instance.__class__ == rel_model),
-            source_col_name=qn(self.field.m2m_column_name()),
-            target_col_name=qn(self.field.m2m_reverse_name()),
-            content_type=ContentType.objects.db_manager(instance._state.db).get_for_model(instance),
+            source_col_name=qn(join_cols[0]),
+            target_col_name=qn(join_cols[1]),
+            content_type=content_type,
             content_type_field_name=self.field.content_type_field_name,
             object_id_field_name=self.field.object_id_field_name,
             **manager_kwargs)
