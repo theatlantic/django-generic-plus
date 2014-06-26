@@ -74,7 +74,8 @@ def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=Non
     def get_generic_fk_file_fields_for_model(model):
         """Returns a list of GenericForeignFileFields on a given model"""
         opts = model._meta
-        return [f for f, m in opts.get_m2m_with_model() if isinstance(f, GenericForeignFileField)]
+        m2m_related_fields = set(opts.many_to_many + opts.virtual_fields)
+        return [f for f in m2m_related_fields if isinstance(f, GenericForeignFileField)]
 
     @monkeypatch([ModelAdmin, InlineModelAdmin])
     def __init__(old_init, self, *args, **kwargs):

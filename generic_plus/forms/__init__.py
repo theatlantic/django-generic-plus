@@ -10,6 +10,8 @@ from django.core.files.uploadedfile import UploadedFile
 from django.db import models
 from django.db.models.fields.files import FieldFile
 from django.forms.forms import BoundField
+from django.forms.formsets import TOTAL_FORM_COUNT
+from django.utils.translation import ungettext
 
 try:
     from django.forms.formsets import DEFAULT_MAX_NUM
@@ -223,9 +225,38 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
                     self.saved_forms.append(form)
         return saved_instances
 
+    def full_clean(self):
+        """
+        Cleans all of self.data and populates self._errors and
+        self._non_form_errors.
+        """
+        self._errors = []
+        self._non_form_errors = self.error_class()
+
+        if not self.is_bound: # Stop further processing.
+            return
+        for i in xrange(0, self.total_form_count()):
+            form = self.forms[i]
+            self._errors.append(form.errors)
+        try:
+            if (self.validate_max and
+                self.total_form_count() - len(self.deleted_forms) > self.max_num) or \
+                self.management_form.cleaned_data[TOTAL_FORM_COUNT] > self.absolute_max:
+                raise ValidationError(ungettext(
+                    "Please submit %d or fewer forms.",
+                    "Please submit %d or fewer forms.", self.max_num) % self.max_num,
+                    code='too_many_forms',
+                )
+            # Give self.clean() a chance to do cross-form validation.
+            self.clean()
+        except ValidationError as e:
+            if getattr(e, 'code', None) != 'missing_management_form':
+                self._non_form_errors = self.error_class(e.messages)
+
 
 def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFormSet,
-        form_attrs=None, formset_attrs=None, formfield_callback=None, prefix=None):
+        form_attrs=None, formset_attrs=None, formfield_callback=None, prefix=None,
+        for_concrete_model=True):
     model = field.rel.to
     ct_field = model._meta.get_field(field.content_type_field_name)
     ct_fk_field = model._meta.get_field(field.object_id_field_name)
@@ -272,6 +303,8 @@ def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFor
         'default_prefix': prefix,
         'max_num': DEFAULT_MAX_NUM,
         'absolute_max': max(DEFAULT_MAX_NUM, (formset_attrs or {}).get('max_num') or 0),
+        'for_concrete_model': for_concrete_model,
+        'validate_max': False,
     }
     inline_formset_attrs.update(formset_attrs or {})
 
