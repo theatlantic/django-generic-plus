@@ -488,25 +488,18 @@ class GenericForeignFileDescriptor(object):
             instance.__dict__[self.file_field.name] = attr
 
         # Other types of files may be assigned as well, but they need to have
-        # the FieldFile interface added to the. Thus, we wrap any other type of
-        # File inside a FieldFile (well, the field's attr_class, which is
-        # usually FieldFile).
-        elif isinstance(value, File) and not isinstance(value, FieldFile):
+        # the correct FieldFile interface added to them. Thus, we wrap any
+        # other type of File inside a FieldFile (well, the field's attr_class,
+        #  which is usually FieldFile).
+        elif isinstance(value, File):
             file_copy = attr_cls(instance, self.file_field, value.name)
-            file_copy.file = value
+            if isinstance(value, FieldFile):
+                file_copy.file = value.file
+            else:
+                file_copy.file = value
             file_copy.related_object = obj
             file_copy._committed = False
             instance.__dict__[self.file_field.name] = file_copy
-
-        # Finally, because of the (some would say boneheaded) way pickle works,
-        # the underlying FieldFile might not actually itself have an associated
-        # file. So we need to reset the details of the FieldFile in those cases.
-        elif isinstance(value, FieldFile):
-            value.instance = instance
-            value.field = self.file_field
-            value.storage = self.file_field.storage
-            value.related_object = obj
-            instance.__dict__[self.file_field.name] = value
 
     def __set__(self, instance, value):
         if instance is None:
