@@ -494,7 +494,10 @@ class GenericForeignFileDescriptor(object):
         elif isinstance(value, File):
             file_copy = attr_cls(instance, self.file_field, value.name)
             if isinstance(value, FieldFile):
-                file_copy.file = value.file
+                # Avoid unnecessary IO caused by accessing ``value.file``
+                if value and getattr(value, '_file', None):
+                    file_copy.file = value.file
+                file_copy._committed = value._committed
             else:
                 file_copy.file = value
             file_copy.related_object = obj
