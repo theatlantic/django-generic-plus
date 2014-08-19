@@ -387,7 +387,7 @@ class GenericForeignFileDescriptor(object):
 
         qn = connection.ops.quote_name
 
-        if hasattr(instance._default_manager, 'prefetch_related'):
+        if hasattr(instance.__class__._default_manager, 'prefetch_related'):
             # Django 1.4+
             manager_kwargs = {
                 'prefetch_cache_name': self.field.attname,
