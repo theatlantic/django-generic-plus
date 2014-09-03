@@ -16,8 +16,13 @@ from django.db import connection, router, models
 from django.db.models.deletion import DO_NOTHING
 from django.db.models.fields.files import FieldFile, FileDescriptor
 from django.db.models.fields.related import RelatedField, Field, ManyToOneRel
-from django.contrib.contenttypes.generic import GenericRelation, GenericRel
+from django.contrib.contenttypes.generic import GenericRelation
 from django.utils.functional import curry
+
+try:
+    from django.contrib.contenttypes.fields import GenericRel
+except ImportError:
+    from django.contrib.contenttypes.generic import GenericRel
 
 try:
     from django.db.models.fields.related import ForeignObject, ForeignObjectRel
