@@ -63,6 +63,7 @@ def patch_model_form():
 
 def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=None):
     from generic_plus.fields import GenericForeignFileField
+    from django.contrib.admin.util import flatten_fieldsets
 
     if not BaseModelAdmin:
         from django.contrib.admin.options import BaseModelAdmin
@@ -107,6 +108,21 @@ def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=Non
                 self.inlines.append(field.get_inline_admin_formset())
 
         old_init(self, *args, **kwargs)
+
+    @monkeypatch(ModelAdmin)
+    def get_inline_instances(old_func, self, request):
+        """
+        Skip generic-plus inlines if the field is not in fieldsets.
+        Failing to do so causes ManagementForm validation errors on save.
+        """
+        inline_instances = old_func(self, request)
+        fieldsets = flatten_fieldsets(self.get_fieldsets(request))
+        for inline_instance in inline_instances:
+            if hasattr(inline_instance, 'field'):
+                if isinstance(inline_instance.field, GenericForeignFileField):
+                    if inline_instance.field.name not in fieldsets:
+                        continue
+            yield inline_instance
 
     @monkeypatch(BaseModelAdmin)
     def formfield_for_dbfield(old_func, self, db_field, **kwargs):
