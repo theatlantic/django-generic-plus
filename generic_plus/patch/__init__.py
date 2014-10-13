@@ -1,4 +1,5 @@
 from six.moves import filter
+import types
 
 import collections
 from .utils import monkeypatch
@@ -117,12 +118,15 @@ def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=Non
         """
         inline_instances = old_func(self, request, *args)
         fieldsets = flatten_fieldsets(self.get_fieldsets(request))
-        for inline_instance in inline_instances:
-            if hasattr(inline_instance, 'field'):
-                if isinstance(inline_instance.field, GenericForeignFileField):
-                    if inline_instance.field.name not in fieldsets:
-                        continue
-            yield inline_instance
+
+        def skip_inline_instance(inline):
+            f = getattr(inline, 'field', None)
+            return isinstance(f, GenericForeignFileField) and f.name not in fieldsets
+
+        if isinstance(inline_instances, types.GeneratorType):
+            return (i for i in inline_instances if not(skip_inline_instance(i)))
+        else:
+            return [i for i in inline_instances if not(skip_inline_instance(i))]
 
     @monkeypatch(BaseModelAdmin)
     def formfield_for_dbfield(old_func, self, db_field, **kwargs):
