@@ -19,7 +19,7 @@ except IOError:
 
 setup(
     name='django-generic-plus',
-    version="1.1.8",
+    version="1.1.9",
     install_requires=[
         'six>=1.7.0',
     ],
