@@ -250,8 +250,10 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
             # Give self.clean() a chance to do cross-form validation.
             self.clean()
         except ValidationError as e:
+
             if getattr(e, 'code', None) != 'missing_management_form':
-                self._non_form_errors = self.error_class(e.messages)
+                if e.messages != [u'ManagementForm data is missing or has been tampered with']:
+                    self._non_form_errors = self.error_class(e.messages)
 
 
 def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFormSet,
