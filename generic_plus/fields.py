@@ -76,7 +76,7 @@ class GenericForeignFileField(GenericRelation):
     file_field_cls = models.FileField
     rel_file_field_name = 'file'
 
-    def __init__(self, to, rel_file_field_name=None, **kwargs):
+    def __init__(self, to, rel_file_field_name=None, field_identifier=None, **kwargs):
         """
         Parameters
         ----------
@@ -86,6 +86,7 @@ class GenericForeignFileField(GenericRelation):
             "file" [the default])
         """
         self.rel_file_field_name = rel_file_field_name or self.rel_file_field_name
+        self.field_identifier = field_identifier
 
         self.file_kwargs = {
             'editable': False,
@@ -120,6 +121,7 @@ class GenericForeignFileField(GenericRelation):
         # Override content-type/object-id field names on the related class
         self.object_id_field_name = kwargs.pop("object_id_field", "object_id")
         self.content_type_field_name = kwargs.pop("content_type_field", "content_type")
+        self.field_identifier_field_name = kwargs.pop("field_identifier_field", "field_identifier")
 
         self.for_concrete_model = kwargs.pop("for_concrete_model", True)
 
@@ -402,6 +404,9 @@ class GenericForeignFileDescriptor(object):
             manager_kwargs = {
                 'join_table': qn(self.field.m2m_db_table()),
             }
+        manager_kwargs = {
+            'prefetch_cache_name': self.field.attname,
+        }
 
         if hasattr(self.field.rel, 'symmetrical'):
             # Django <= 1.5
@@ -431,6 +436,7 @@ class GenericForeignFileDescriptor(object):
             content_type=content_type,
             content_type_field_name=self.field.content_type_field_name,
             object_id_field_name=self.field.object_id_field_name,
+            field_identifier_field_name=self.field.field_identifier_field_name,
             **manager_kwargs)
 
         if not manager.pk_val:
@@ -560,7 +566,8 @@ def create_generic_related_manager(superclass):
 
         def __init__(self, model=None, instance=None, symmetrical=None,
                      source_col_name=None, target_col_name=None, content_type=None,
-                     content_type_field_name=None, object_id_field_name=None, **kwargs):
+                     content_type_field_name=None, object_id_field_name=None,
+                     field_identifier_field_name=None, **kwargs):
             super(GenericRelatedObjectManager, self).__init__()
             self.model = model
             self.content_type = content_type
@@ -577,6 +584,11 @@ def create_generic_related_manager(superclass):
                     '%s__pk' % content_type_field_name: content_type.id,
                     '%s__exact' % object_id_field_name: instance._get_pk_val(),
                 }
+            self._field = kwargs.pop('field', None)
+            self.file_field_name = self._field.file_field_name
+            if field_identifier_field_name:
+                self.core_filters['%s__exact' % field_identifier_field_name] = getattr(self._field, field_identifier_field_name)
+
             if 'prefetch_cache_name' in kwargs:
                 # django 1.4+
                 self.prefetch_cache_name = kwargs['prefetch_cache_name']
@@ -585,9 +597,6 @@ def create_generic_related_manager(superclass):
             self.content_type_field_name = content_type_field_name
             self.object_id_field_name = object_id_field_name
             self.pk_val = self.instance._get_pk_val()
-            # Change from django.contrib.contenttypes.generic.create_generic_related_manager()
-            self._field = kwargs.pop('field', None)
-            self.file_field_name = self._field.file_field_name
 
         def get_query_set(self):
             if hasattr(self, 'prefetch_cache_name'):
