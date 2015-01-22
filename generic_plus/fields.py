@@ -394,16 +394,6 @@ class GenericForeignFileDescriptor(object):
 
         qn = connection.ops.quote_name
 
-        if hasattr(instance.__class__._default_manager, 'prefetch_related'):
-            # Django 1.4+
-            manager_kwargs = {
-                'prefetch_cache_name': self.field.attname,
-            }
-        else:
-            # Django <= 1.3
-            manager_kwargs = {
-                'join_table': qn(self.field.m2m_db_table()),
-            }
         manager_kwargs = {
             'prefetch_cache_name': self.field.attname,
         }
@@ -449,26 +439,11 @@ class GenericForeignFileDescriptor(object):
                 val = getattr(instance, cache_name)
             except AttributeError:
                 db = manager._db or router.db_for_read(rel_model, instance=instance)
-                query = manager.core_filters or {
-                    '%s__pk' % manager.content_type_field_name: manager.content_type.id,
-                    '%s__exact' % manager.object_id_field_name: manager.pk_val,
-                }
-
-                try:
-                    prev_object_id_field = rel_model._meta.get_field(
-                        'prev_%s' % manager.object_id_field_name)
-                except models.FieldDoesNotExist:
-                    pass
-                else:
-                    query['%s__isnull' % prev_object_id_field.attname] = True
-
                 qset = superclass.get_query_set(manager).using(db)
 
                 try:
-                    val = qset.get(**query)
+                    val = qset.get(**manager.core_filters)
                 except rel_model.DoesNotExist:
-                    if not self.is_file_field:
-                        return None
                     val = None
 
             self.set_file_value(instance, file_val, obj=val)
@@ -573,19 +548,12 @@ def create_generic_related_manager(superclass):
             self.content_type = content_type
             self.symmetrical = symmetrical
             self.instance = instance
-            if 'join_table' in kwargs:
-                # django <= 1.3
-                self.join_table = kwargs.pop('join_table')
-                self.join_table = model._meta.db_table
-                self.core_filters = kwargs.pop('core_filters', None) or {}
-            else:
-                # django 1.4+
-                self.core_filters = {
-                    '%s__pk' % content_type_field_name: content_type.id,
-                    '%s__exact' % object_id_field_name: instance._get_pk_val(),
-                }
             self._field = kwargs.pop('field', None)
             self.file_field_name = self._field.file_field_name
+            self.core_filters = {
+                '%s__pk' % content_type_field_name: content_type.id,
+                '%s__exact' % object_id_field_name: instance._get_pk_val(),
+            }
             if field_identifier_field_name:
                 self.core_filters['%s__exact' % field_identifier_field_name] = getattr(self._field, field_identifier_field_name)
 
