@@ -132,6 +132,7 @@ def generic_fk_file_formfield_factory(widget=None, related=None, **attrs):
 class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
 
     extra_fields = None
+    min_num = 0
     max_num = 1
     can_order = False
     can_delete = True

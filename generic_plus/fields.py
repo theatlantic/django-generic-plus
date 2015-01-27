@@ -154,9 +154,9 @@ class GenericForeignFileField(GenericRelation):
 
         if 'virtual_only' in contribute_to_class_args:
             # Django 1.6+
-            cls._meta.add_virtual_field(self)
-
-        super(GenericRelation, self).contribute_to_class(cls, name)
+            super(GenericRelation, self).contribute_to_class(cls, name, virtual_only=True)
+        else:
+            super(GenericForeignFileField, self).contribute_to_class(cls, name)
 
         if not isinstance(self.file_field_cls, models.ImageField):
             self.file_kwargs.pop('width_field', None)
