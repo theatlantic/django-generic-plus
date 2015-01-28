@@ -206,6 +206,16 @@ class GenericForeignFileField(GenericRelation):
             True,
             self.attname)
 
+    def bulk_related_objects(self, *args, **kwargs):
+        """
+        Return all objects related to ``objs`` via this ``GenericRelation``.
+
+        """
+        qs = super(GenericForeignFileField, self).bulk_related_objects(*args, **kwargs)
+        if self.field_identifier:
+            qs = qs.filter(**{"%s__exact" % self.field_identifier_field_name: self.field_identifier})
+        return qs
+
     def south_init(self):
         """
         This method is called by south before it introspects the field.
