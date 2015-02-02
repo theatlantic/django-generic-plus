@@ -4,9 +4,9 @@ django.contrib.contenttypes.
 """
 import six
 
-import inspect
 from operator import attrgetter
 
+import django
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.generic import GenericInlineModelAdmin
 from django.core.exceptions import ObjectDoesNotExist
@@ -16,6 +16,7 @@ from django.db import connection, router, models
 from django.db.models.deletion import DO_NOTHING
 from django.db.models.fields.files import FieldFile, FileDescriptor
 from django.db.models.fields.related import RelatedField, Field, ManyToOneRel
+from django.db.models.related import RelatedObject
 from django.contrib.contenttypes.generic import GenericRelation
 from django.utils.functional import curry
 
@@ -143,6 +144,28 @@ class GenericForeignFileField(GenericRelation):
 
         self.file_kwargs['db_column'] = kwargs.get('db_column', self.name)
 
+    if django.VERSION[:2] in ((1, 6), (1, 7)):
+        # Prior to Django 1.6, Model._meta.get_field_by_name() never returned
+        # virtual fields. django-generic-plus takes advantage of this fact in
+        # order to have _both_ a virtual field (the generic relation) and a
+        # local field (the FileField). In Django 1.6, get_field_by_name() will
+        # return the virtual field if the field has the 'related' attr. To get
+        # around this new inconvenience, we make an @property for related that
+        # raises an AttributeError while Model._meta.init_name_map() is being
+        # executed.
+        def do_related_class(self, other, cls):
+            self.set_attributes_from_rel()
+            self._related = RelatedObject(other, cls, self)
+            if not cls._meta.abstract:
+                self.contribute_to_related_class(other, self._related)
+
+        @property
+        def related(self):
+            if hasattr(self.model._meta, '_name_map') or not hasattr(self.model._meta, '_related_objects_cache'):
+                return self._related
+            else:
+                raise AttributeError("'%s' object has no attribute 'related'" % type(self).__name__)
+
     def contribute_to_class(self, cls, name):
         self.generic_rel_name = '%s_generic_rel' % name
         self.raw_file_field_name = '%s_raw' % name
@@ -151,14 +174,7 @@ class GenericForeignFileField(GenericRelation):
         # Save a reference to which model this class is on for future use
         self.model = cls
 
-        contribute_to_class_args = inspect.getargspec(
-                models.Field.contribute_to_class).args
-
-        if 'virtual_only' in contribute_to_class_args:
-            # Django 1.6+
-            super(GenericRelation, self).contribute_to_class(cls, name, virtual_only=True)
-        else:
-            super(GenericForeignFileField, self).contribute_to_class(cls, name)
+        super(GenericForeignFileField, self).contribute_to_class(cls, name)
 
         if not isinstance(self.file_field_cls, models.ImageField):
             self.file_kwargs.pop('width_field', None)
@@ -199,12 +215,15 @@ class GenericForeignFileField(GenericRelation):
     def is_cached(self, instance):
         return hasattr(instance, self.get_cache_name())
 
-    def get_prefetch_query_set(self, instances):
+    def get_prefetch_queryset(self, instances, queryset=None):
         return (self.bulk_related_objects(instances),
             attrgetter(self.object_id_field_name),
             lambda obj: obj._get_pk_val(),
             True,
             self.attname)
+
+    if django.VERSION < (1, 7):
+        get_prefetch_query_set = get_prefetch_queryset
 
     def bulk_related_objects(self, *args, **kwargs):
         """
@@ -449,7 +468,10 @@ class GenericForeignFileDescriptor(object):
                 val = getattr(instance, cache_name)
             except AttributeError:
                 db = manager._db or router.db_for_read(rel_model, instance=instance)
-                qset = superclass.get_query_set(manager).using(db)
+                if django.VERSION < (1, 7):
+                    qset = superclass.get_query_set(manager).using(db)
+                else:
+                    qset = superclass.get_queryset(manager).using(db)
 
                 try:
                     val = qset.get(**manager.core_filters)
@@ -576,7 +598,7 @@ def create_generic_related_manager(superclass):
             self.object_id_field_name = object_id_field_name
             self.pk_val = self.instance._get_pk_val()
 
-        def get_query_set(self):
+        def get_queryset(self):
             if hasattr(self, 'prefetch_cache_name'):
                 try:
                     return self.instance._prefetched_objects_cache[self.prefetch_cache_name]
@@ -587,20 +609,32 @@ def create_generic_related_manager(superclass):
                 ('%s__pk' % self.content_type_field_name): self.content_type.id,
                 ('%s__exact' % self.object_id_field_name): self.pk_val,
             }
-            return superclass.get_query_set(self).using(db).filter(**query)
+            if django.VERSION < (1, 7):
+                return superclass.get_query_set(self).using(db).filter(**query)
+            else:
+                return superclass.get_queryset(self).using(db).filter(**query)
 
-        def get_prefetch_query_set(self, instances):
+        if django.VERSION < (1, 7):
+            get_query_set = get_queryset
+
+        def get_prefetch_queryset(self, instances, queryset=None):
             db = self._db or router.db_for_read(self.model, instance=instances[0])
             query = {
                 ('%s__pk' % self.content_type_field_name): self.content_type.id,
                 ('%s__in' % self.object_id_field_name): set(obj._get_pk_val() for obj in instances),
             }
-            qs = super(GenericRelatedObjectManager, self).get_query_set().using(db).filter(**query)
-            return (qs,
+            if django.VERSION < (1, 7):
+                qs = super(GenericRelatedObjectManager, self).get_query_set()
+            else:
+                qs = super(GenericRelatedObjectManager, self).get_queryset()
+            return (qs.using(db).filter(**query),
                     attrgetter(self.object_id_field_name),
                     lambda obj: obj._get_pk_val(),
                     False,
                     self.prefetch_cache_name)
+
+        if django.VERSION < (1, 7):
+            get_prefetch_query_set = get_prefetch_queryset
 
         def add(self, *objs):
             for obj in objs:
