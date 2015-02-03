@@ -291,6 +291,7 @@ def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFor
         }),
         '__module__': formset.__module__,
     }
+
     form_class_attrs.update(form_attrs or {})
     GenericForeignFileForm = ModelFormMetaclass('GenericForeignFileForm', (forms.ModelForm,), form_class_attrs)
 
@@ -309,6 +310,9 @@ def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFor
         'for_concrete_model': for_concrete_model,
         'validate_max': False,
     }
+    if field.field_identifier_field_name:
+        field_identifier = getattr(field, field.field_identifier_field_name)
+        inline_formset_attrs[field.field_identifier_field_name] = field_identifier
     inline_formset_attrs.update(formset_attrs or {})
 
     return type('GenericForeignFileInlineFormSet', (formset,), inline_formset_attrs)
