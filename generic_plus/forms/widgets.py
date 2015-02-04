@@ -122,7 +122,11 @@ class GenericForeignFileWidget(Input):
         }
         if instance:
             formset_kwargs['instance'] = instance.content_object
-            formset_kwargs['queryset'] = instance.__class__._default_manager
+            qs = instance.__class__._default_manager
+            if self.field.field_identifier_field_name:
+                field_identifier = getattr(instance, self.field.field_identifier_field_name)
+                qs = qs.filter(field_identifier=field_identifier)
+            formset_kwargs['queryset'] = qs
 
         formset = FormSet(**formset_kwargs)
         parent_admin = getattr(self, 'parent_admin', None)
