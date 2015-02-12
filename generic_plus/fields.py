@@ -122,7 +122,7 @@ class GenericForeignFileField(GenericRelation):
         # Override content-type/object-id field names on the related class
         self.object_id_field_name = kwargs.pop("object_id_field", "object_id")
         self.content_type_field_name = kwargs.pop("content_type_field", "content_type")
-        self.field_identifier_field_name = kwargs.pop("field_identifier_field", "field_identifier")
+        self.field_identifier_field_name = kwargs.pop("field_identifier_field", None)
 
         self.for_concrete_model = kwargs.pop("for_concrete_model", True)
 
