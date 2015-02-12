@@ -231,7 +231,7 @@ class GenericForeignFileField(GenericRelation):
 
         """
         qs = super(GenericForeignFileField, self).bulk_related_objects(*args, **kwargs)
-        if self.field_identifier:
+        if self.field_identifier_field_name:
             qs = qs.filter(**{"%s__exact" % self.field_identifier_field_name: self.field_identifier})
         return qs
 
