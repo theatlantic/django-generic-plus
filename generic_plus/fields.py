@@ -76,6 +76,7 @@ class GenericForeignFileField(GenericRelation):
     file_descriptor_cls = FileDescriptor
     file_field_cls = models.FileField
     rel_file_field_name = 'file'
+    field_identifier_field_name = None
 
     def __init__(self, to, rel_file_field_name=None, field_identifier=None, **kwargs):
         """
@@ -122,7 +123,7 @@ class GenericForeignFileField(GenericRelation):
         # Override content-type/object-id field names on the related class
         self.object_id_field_name = kwargs.pop("object_id_field", "object_id")
         self.content_type_field_name = kwargs.pop("content_type_field", "content_type")
-        self.field_identifier_field_name = kwargs.pop("field_identifier_field", None)
+        self.field_identifier_field_name = kwargs.pop("field_identifier_field", self.field_identifier_field_name)
 
         self.for_concrete_model = kwargs.pop("for_concrete_model", True)
 
