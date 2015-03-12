@@ -78,7 +78,7 @@ class GenericForeignFileField(GenericRelation):
     rel_file_field_name = 'file'
     field_identifier_field_name = None
 
-    def __init__(self, to, rel_file_field_name=None, field_identifier=None, **kwargs):
+    def __init__(self, to, rel_file_field_name=None, field_identifier="", **kwargs):
         """
         Parameters
         ----------
