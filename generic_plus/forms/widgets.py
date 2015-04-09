@@ -49,7 +49,11 @@ class GenericForeignFileWidget(Input):
             except MultipleObjectsReturned:
                 file_value = value
                 if bound_field and getattr(bound_field, 'form', None):
-                    value = bound_field.form.data.get("%s-0-id" % bound_field.form.add_prefix(name))
+                    if name.startswith(bound_field.form.prefix):
+                        formset_prefix = name
+                    else:
+                        formset_prefix = bound_field.form.add_prefix(name)
+                    value = bound_field.form.data.get("%s-0-id" % formset_prefix)
             else:
                 file_value = value
                 value = obj.pk
