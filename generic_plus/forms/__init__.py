@@ -49,6 +49,8 @@ class GenericForeignFileBoundField(BoundField):
         elif isinstance(value, UploadedFile):
             use_file_field = True
         # Swap out the GenericForeignFileFormField with a django.forms.FileField
+        if not db_field.missing_file_fallback:
+            use_file_field = False
         if use_file_field and self.db_file_field:
             widget = AdminFileWidget
             if form._meta.widgets and form._meta.widgets.get(name):

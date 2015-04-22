@@ -78,7 +78,8 @@ class GenericForeignFileField(GenericRelation):
     rel_file_field_name = 'file'
     field_identifier_field_name = None
 
-    def __init__(self, to, rel_file_field_name=None, field_identifier="", **kwargs):
+    def __init__(self, to, rel_file_field_name=None, field_identifier="",
+        missing_file_fallback=True, **kwargs):
         """
         Parameters
         ----------
@@ -86,9 +87,18 @@ class GenericForeignFileField(GenericRelation):
         rel_file_field_name : str
             Name of the FileField on the generic related model (e.g. "image",
             "file" [the default])
+        field_identifier : str
+            A string to uniquely identify the field on the model, allowing
+            multiple GenericForeignFileFields to point to a single model class
+        missing_file_fallback : bool
+            If set to True (the default), the GenericForeignFileField widget
+            will show the admin's file field widget in the event that there is
+            a value on the model for the file field, but no corresponding row
+            in the table with the generic foreign key.
         """
         self.rel_file_field_name = rel_file_field_name or self.rel_file_field_name
         self.field_identifier = field_identifier
+        self.missing_file_fallback = missing_file_fallback
 
         self.file_kwargs = {
             'editable': False,
