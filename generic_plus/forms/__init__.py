@@ -277,9 +277,7 @@ def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFor
             return db_field.formfield(**kwargs)
 
     def has_changed(self):
-        if not self.changed_data and not any(self.cleaned_data.values()):
-            return False
-        return True
+        return bool(self.changed_data)
 
     form_class_attrs = {
         'has_changed': has_changed,
