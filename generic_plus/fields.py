@@ -8,7 +8,6 @@ from operator import attrgetter
 
 import django
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes.generic import GenericInlineModelAdmin
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import File
 from django.core.files.uploadedfile import UploadedFile
@@ -16,11 +15,22 @@ from django.db import connection, router, models
 from django.db.models.deletion import DO_NOTHING
 from django.db.models.fields.files import FieldFile, FileDescriptor
 from django.db.models.fields.related import RelatedField, Field, ManyToOneRel
-from django.db.models.related import RelatedObject
-from django.contrib.contenttypes.generic import GenericRelation
 from django.utils.functional import curry
 
 try:
+    # Django 1.8+
+    from django.contrib.contenttypes.fields import GenericRelation
+except ImportError:
+    from django.contrib.contenttypes.generic import GenericRelation
+
+try:
+    # Django 1.8+
+    from django.contrib.contenttypes.admin import GenericInlineModelAdmin
+except ImportError:
+    from django.contrib.contenttypes.generic import GenericInlineModelAdmin
+
+try:
+    # Django 1.7+
     from django.contrib.contenttypes.fields import GenericRel
 except ImportError:
     from django.contrib.contenttypes.generic import GenericRel
@@ -165,6 +175,8 @@ class GenericForeignFileField(GenericRelation):
         # raises an AttributeError while Model._meta.init_name_map() is being
         # executed.
         def do_related_class(self, other, cls):
+            from django.db.models.related import RelatedObject
+
             self.set_attributes_from_rel()
             self._related = RelatedObject(other, cls, self)
             if not cls._meta.abstract:
@@ -182,10 +194,17 @@ class GenericForeignFileField(GenericRelation):
         self.raw_file_field_name = '%s_raw' % name
         self.file_field_name = name
 
+        if hasattr(self, 'set_attributes_from_name'):
+            self.set_attributes_from_name(name)
+            self.file_kwargs['db_column'] = self.db_column or self.attname
+
         # Save a reference to which model this class is on for future use
         self.model = cls
 
         super(GenericForeignFileField, self).contribute_to_class(cls, name)
+
+        if django.VERSION >= (1, 8):
+            self.column = self.file_kwargs['db_column']
 
         if not isinstance(self.file_field_cls, models.ImageField):
             self.file_kwargs.pop('width_field', None)

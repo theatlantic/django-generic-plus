@@ -4,7 +4,6 @@ from six.moves import xrange
 
 from django import forms
 from django.contrib.admin.widgets import AdminFileWidget
-from django.contrib.contenttypes.generic import BaseGenericInlineFormSet
 from django.core import validators
 from django.core.files.uploadedfile import UploadedFile
 from django.db import models
@@ -12,6 +11,12 @@ from django.db.models.fields.files import FieldFile
 from django.forms.forms import BoundField
 from django.forms.formsets import TOTAL_FORM_COUNT
 from django.utils.translation import ungettext
+
+try:
+    # Django 1.8+
+    from django.contrib.contenttypes.forms import BaseGenericInlineFormSet
+except ImportError:
+    from django.contrib.contenttypes.generic import BaseGenericInlineFormSet
 
 try:
     from django.forms.formsets import DEFAULT_MAX_NUM
