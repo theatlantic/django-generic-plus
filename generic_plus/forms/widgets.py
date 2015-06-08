@@ -49,7 +49,7 @@ class GenericForeignFileWidget(Input):
             except MultipleObjectsReturned:
                 file_value = value
                 if bound_field and getattr(bound_field, 'form', None):
-                    if name.startswith(bound_field.form.prefix):
+                    if not bound_field.form.prefix or name.startswith(bound_field.form.prefix):
                         formset_prefix = name
                     else:
                         formset_prefix = bound_field.form.add_prefix(name)
