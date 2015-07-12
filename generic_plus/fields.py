@@ -3,6 +3,7 @@ Defines GenericForeignFileField, a subclass of GenericRelation from
 django.contrib.contenttypes.
 """
 import six
+from six.moves import reduce
 
 import operator
 
