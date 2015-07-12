@@ -4,7 +4,7 @@ django.contrib.contenttypes.
 """
 import six
 
-from operator import attrgetter
+import operator
 
 import django
 from django.contrib.contenttypes.models import ContentType
@@ -220,7 +220,14 @@ class GenericForeignFileField(GenericRelation):
         self.file_field.creation_counter = self.creation_counter
 
         # This calls contribute_to_class() for the FileField
-        cls.add_to_class(self.file_field_name, self.file_field)
+        parents = cls._meta.parents.keys()
+        parent_field_names = []
+        if parents:
+            parent_fields = reduce(operator.add, [p._meta.local_fields for p in parents])
+            parent_field_names = [f.name for f in parent_fields]
+        # Don't duplicate the field when inherited from a parent model
+        if self.file_field_name not in parent_field_names:
+            cls.add_to_class(self.file_field_name, self.file_field)
 
         # Add the descriptor for the generic relation
         generic_descriptor = GenericForeignFileDescriptor(self, self.file_field)
@@ -247,7 +254,7 @@ class GenericForeignFileField(GenericRelation):
 
     def get_prefetch_queryset(self, instances, queryset=None):
         return (self.bulk_related_objects(instances),
-            attrgetter(self.object_id_field_name),
+            operator.attrgetter(self.object_id_field_name),
             lambda obj: obj._get_pk_val(),
             True,
             self.attname)
@@ -359,7 +366,7 @@ class GenericForeignFileField(GenericRelation):
 
     def formfield(self, **kwargs):
         factory_kwargs = {
-            'related': self.related,
+            'related': getattr(self, 'related', None),
         }
         widget = kwargs.pop('widget', None) or generic_fk_file_widget_factory(**factory_kwargs)
         formfield = kwargs.pop('form_class', None) or generic_fk_file_formfield_factory(widget=widget, **factory_kwargs)
@@ -658,7 +665,7 @@ def create_generic_related_manager(superclass):
             else:
                 qs = super(GenericRelatedObjectManager, self).get_queryset()
             return (qs.using(db).filter(**query),
-                    attrgetter(self.object_id_field_name),
+                    operator.attrgetter(self.object_id_field_name),
                     lambda obj: obj._get_pk_val(),
                     False,
                     self.prefetch_cache_name)
