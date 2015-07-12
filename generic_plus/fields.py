@@ -224,7 +224,7 @@ class GenericForeignFileField(GenericRelation):
         parents = cls._meta.parents.keys()
         parent_field_names = []
         if parents:
-            parent_fields = reduce(operator.add, [p._meta.local_fields for p in parents])
+            parent_fields = reduce(operator.add, [p._meta.local_fields for p in parents], [])
             parent_field_names = [f.name for f in parent_fields]
         # Don't duplicate the field when inherited from a parent model
         if self.file_field_name not in parent_field_names:
