@@ -187,6 +187,8 @@ class GenericForeignFileField(GenericRelation):
         def related(self):
             if hasattr(self.model._meta, '_name_map') or not hasattr(self.model._meta, '_related_objects_cache'):
                 return self._related
+            elif hasattr(self.model._meta, '_related_objects_cache') and self._related not in self.model._meta._related_objects_cache:
+                return self._related
             else:
                 raise AttributeError("'%s' object has no attribute 'related'" % type(self).__name__)
 
@@ -228,7 +230,9 @@ class GenericForeignFileField(GenericRelation):
             parent_field_names = [f.name for f in parent_fields]
         # Don't duplicate the field when inherited from a parent model
         if self.file_field_name not in parent_field_names:
-            cls.add_to_class(self.file_field_name, self.file_field)
+            # Don't add field to proxy models
+            if not cls._meta.proxy:
+                cls.add_to_class(self.file_field_name, self.file_field)
 
         # Add the descriptor for the generic relation
         generic_descriptor = GenericForeignFileDescriptor(self, self.file_field)
