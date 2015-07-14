@@ -104,10 +104,9 @@ def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=Non
             # class, so we need to copy it before we append.
             # (otherwise we'll modify the `inlines` attribute for
             # all ModelAdmins).
-            inlines = getattr(self, 'inlines', [])
-            if isinstance(inlines, collections.MutableSequence):
-                self.inlines = list(inlines)
-            else:
+            try:
+                self.inlines = list(self.inlines)
+            except:
                 self.inlines = []
 
             # Prevent duplicate inlines being added
