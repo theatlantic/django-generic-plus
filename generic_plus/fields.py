@@ -187,10 +187,10 @@ class GenericForeignFileField(GenericRelation):
         def related(self):
             if hasattr(self.model._meta, '_name_map') or not hasattr(self.model._meta, '_related_objects_cache'):
                 return self._related
-            elif hasattr(self.model._meta, '_related_objects_cache') and self._related not in self.model._meta._related_objects_cache:
-                return self._related
-            else:
-                raise AttributeError("'%s' object has no attribute 'related'" % type(self).__name__)
+            elif django.VERSION[0:2] == (1, 7):
+                if hasattr(self.model._meta, '_related_objects_cache') and self._related not in self.model._meta._related_objects_cache:
+                    return self._related
+            raise AttributeError("'%s' object has no attribute 'related'" % type(self).__name__)
 
     def contribute_to_class(self, cls, name):
         self.generic_rel_name = '%s_generic_rel' % name
@@ -322,7 +322,7 @@ class GenericForeignFileField(GenericRelation):
         See GenericForeignFileField.south_init() for more documentation
         about the reason this is overridden here.
         """
-        if self.south_executing:
+        if getattr(self, 'south_executing', None):
             return 'FileField'
         else:
             # super() returns 'ManyToManyField'
@@ -336,7 +336,7 @@ class GenericForeignFileField(GenericRelation):
         See GenericForeignFileField.south_init() for more documentation
         about the reason this is overridden here.
         """
-        if self.south_executing:
+        if getattr(self, 'south_executing', None):
             return models.Field.db_type(self, connection)
         else:
             # super() returns None
@@ -437,6 +437,15 @@ class GenericForeignFileField(GenericRelation):
                 get_formset = attrs.pop('get_formset')
 
         return type('GenericForeignFileInline', (GenericForeignFileInline,), attrs)
+
+    @property
+    def get_path_info(self):
+        raise AttributeError("'%s' object has no attribute 'get_path_info'" % type(self).__name__)
+
+    def get_attname_column(self):
+        attname = self.get_attname()
+        column = self.db_column or attname
+        return attname, column
 
 
 class GenericForeignFileDescriptor(object):
