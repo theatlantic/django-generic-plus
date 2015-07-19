@@ -57,7 +57,7 @@ class TestModels(test.TestCase):
                 slug='gp-b', test_file="test/bar.txt"),
             file='test/bar.txt')
 
-        for i in xrange(1, 4):
+        for i in range(1, 4):
             fm_a.m2m.add(TestM2M.objects.create(slug='m2m-a%d' % i))
         fm_b.m2m.add(TestM2M.objects.create(slug='m2m-b1'))
 
