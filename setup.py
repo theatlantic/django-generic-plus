@@ -8,15 +8,6 @@ except ImportError:
     from setuptools import setup, find_packages
 
 
-setup_kwargs = {}
-
-try:
-    setup_kwargs['long_description'] = open('README.rst').read()
-except IOError:
-    # Use the create_readme_rst command to convert README to reStructuredText
-    pass
-
-
 setup(
     name='django-generic-plus',
     version="1.2.18",
@@ -25,6 +16,7 @@ setup(
     ],
     description="Django model field that combines the functionality of "
                 "GenericForeignKey and FileField",
+    long_description=open('README.rst').read(),
     author='The Atlantic',
     author_email='programmers@theatlantic.com',
     url='https://github.com/theatlantic/django-generic-plus',
@@ -37,10 +29,4 @@ setup(
         'Framework :: Django',
     ],
     include_package_data=True,
-    zip_safe=False,
-    entry_points={
-        'distutils.commands': [
-            'create_readme_rst = generic_plus.build:create_readme_rst',
-        ],
-    },
-    **setup_kwargs)
+    zip_safe=False)
