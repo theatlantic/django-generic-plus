@@ -10,6 +10,7 @@ from django.db import models
 from django.db.models.fields.files import FieldFile
 from django.forms.forms import BoundField
 from django.forms.formsets import TOTAL_FORM_COUNT
+from django.forms.models import modelform_factory
 from django.utils.translation import ungettext
 
 try:
@@ -139,11 +140,11 @@ def generic_fk_file_formfield_factory(widget=None, related=None, **attrs):
 class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
 
     extra_fields = None
-    min_num = 0
+    min_num = 1
     max_num = 1
     can_order = False
     can_delete = True
-    extra = 1
+    extra = 0
     label = "Upload"
     prefix_override = None
 
@@ -272,9 +273,11 @@ def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFor
     ct_fk_field = model._meta.get_field(field.object_id_field_name)
     exclude = [ct_field.name, ct_fk_field.name]
 
+    fields = getattr(formset, 'fields', None)
+    if not fields:
+        fields = modelform_factory(model, exclude=exclude).base_fields
+
     def formfield_for_dbfield(db_field, **kwargs):
-        if isinstance(db_field, models.FileField) and db_field.model == model:
-            kwargs['widget'] = forms.TextInput
         kwargs.pop('request', None)
         if formfield_callback is not None:
             return formfield_callback(db_field, **kwargs)
@@ -290,7 +293,7 @@ def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFor
         field.rel_file_field_name: forms.CharField(required=False),
         "formfield_callback": formfield_for_dbfield,
         "Meta": type('Meta', (object,), {
-            "fields": formset.fields,
+            "fields": fields,
             "exclude": exclude,
             "model": model,
         }),
@@ -299,6 +302,11 @@ def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFor
 
     form_class_attrs.update(form_attrs or {})
     GenericForeignFileForm = ModelFormMetaclass('GenericForeignFileForm', (forms.ModelForm,), form_class_attrs)
+
+    if GenericForeignFileForm.base_fields.get(field.field_identifier_field_name):
+        field_id_formfield = GenericForeignFileForm.base_fields[field.field_identifier_field_name]
+        field_id_formfield.widget = forms.HiddenInput()
+        field_id_formfield.initial = getattr(field, field.field_identifier_field_name)
 
     inline_formset_attrs = {
         "formfield_callback": formfield_for_dbfield,

@@ -155,7 +155,7 @@ class GenericForeignFileWidget(Input):
         return data.get(name, files.get(name, None))
 
 
-def generic_fk_file_widget_factory(widget_cls, related=None, **attrs):
+def generic_fk_file_widget_factory(widget_cls=GenericForeignFileWidget, related=None, **attrs):
     return type('GenericForeignFileWidget', (widget_cls,), attrs)
     widget_attrs = {
         '__module__': widget_cls.__module__,

@@ -204,7 +204,10 @@ class GenericForeignFileField(GenericRelation):
         # Save a reference to which model this class is on for future use
         self.model = cls
 
-        super(GenericForeignFileField, self).contribute_to_class(cls, name)
+        if django.VERSION > (1, 7):
+            super(GenericRelation, self).contribute_to_class(cls, name, virtual_only=True)
+        else:
+            super(GenericForeignFileField, self).contribute_to_class(cls, name)
 
         if django.VERSION >= (1, 8):
             self.column = self.file_kwargs['db_column']
@@ -389,7 +392,7 @@ class GenericForeignFileField(GenericRelation):
         })
         return super(GenericForeignFileField, self).formfield(**kwargs)
 
-    def get_inline_admin_formset(self, formset_cls=None, **kwargs):
+    def get_inline_admin_formset(self, formset_cls=None, form_attrs=None, **kwargs):
         from generic_plus.forms import generic_fk_file_formset_factory, BaseGenericFileInlineFormSet
 
         formset_cls = formset_cls or BaseGenericFileInlineFormSet
@@ -429,7 +432,8 @@ class GenericForeignFileField(GenericRelation):
                         formset_attrs=kwargs,
                         field=self.field,
                         prefix=self.default_prefix,
-                        formfield_callback=curry(self.formfield_for_dbfield, request=request))
+                        formfield_callback=curry(self.formfield_for_dbfield, request=request),
+                        form_attrs=form_attrs)
                     if getattr(self, 'default_prefix', None):
                         formset.default_prefix = self.default_prefix
                     return formset
@@ -442,10 +446,57 @@ class GenericForeignFileField(GenericRelation):
     def get_path_info(self):
         raise AttributeError("'%s' object has no attribute 'get_path_info'" % type(self).__name__)
 
+    @property
+    def get_lookup_constraint(self):
+        raise AttributeError("'%s' object has no attribute 'get_lookup_constraint'" % type(self).__name__)
+
     def get_attname_column(self):
         attname = self.get_attname()
         column = self.db_column or attname
         return attname, column
+
+
+    # def get_lookup_constraint(self, constraint_class, alias, targets, sources, lookups, raw_value):
+    #     try:
+    #         return super(GenericForeignFileField, self).get_lookup_constraint(
+    #             constraint_class, alias, targets, sources, lookups, raw_value)
+    #     except ValueError as e:
+    #         pk_name = self.model._meta.pk.name
+    #         if len(targets) != 1 or targets[0].name not in (self.object_id_field_name, pk_name):
+    #             raise e
+    #
+    #         if len(lookups) != 1 or lookups[0] != 'exact':
+    #             raise e
+    #
+    #         lookup_type = lookups[0]
+    #
+    #         try:
+    #             int(raw_value)
+    #         except ValueError:
+    #             pass
+    #         else:
+    #             raise e
+    #
+    #         import ipdb; ipdb.set_trace()
+    #         target = self.model._meta.get_field_by_name(self.file_field_name)[0]
+    #
+    #         from django.db.models.sql.datastructures import Col
+    #         from django.db.models.sql.where import AND
+    #         root_constraint = constraint_class()
+    #         lookup_class = target.get_lookup(lookup_type)
+    #
+    #         file_constraint = lookup_class(Col(self.model._meta.db_table, target, target), raw_value)
+    #
+    #         null_constraint = super(GenericForeignFileField, self).get_lookup_constraint(
+    #             constraint_class, alias, targets, sources, ['isnull'], True)
+    #
+    #         root_constraint.add(file_constraint, AND)
+    #         root_constraint.add(null_constraint, AND)
+    #         return root_constraint
+    #         #
+    #         # file_field = self.rel.to._meta.get_field_by_name(self.rel_file_field_name)[0]
+    #         # return super(GenericForeignFileField, self).get_lookup_constraint(
+    #         #     constraint_class, alias, (file_field, ), (file_field, ), lookups, raw_value)
 
 
 class GenericForeignFileDescriptor(object):
