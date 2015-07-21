@@ -456,49 +456,6 @@ class GenericForeignFileField(GenericRelation):
         return attname, column
 
 
-    # def get_lookup_constraint(self, constraint_class, alias, targets, sources, lookups, raw_value):
-    #     try:
-    #         return super(GenericForeignFileField, self).get_lookup_constraint(
-    #             constraint_class, alias, targets, sources, lookups, raw_value)
-    #     except ValueError as e:
-    #         pk_name = self.model._meta.pk.name
-    #         if len(targets) != 1 or targets[0].name not in (self.object_id_field_name, pk_name):
-    #             raise e
-    #
-    #         if len(lookups) != 1 or lookups[0] != 'exact':
-    #             raise e
-    #
-    #         lookup_type = lookups[0]
-    #
-    #         try:
-    #             int(raw_value)
-    #         except ValueError:
-    #             pass
-    #         else:
-    #             raise e
-    #
-    #         import ipdb; ipdb.set_trace()
-    #         target = self.model._meta.get_field_by_name(self.file_field_name)[0]
-    #
-    #         from django.db.models.sql.datastructures import Col
-    #         from django.db.models.sql.where import AND
-    #         root_constraint = constraint_class()
-    #         lookup_class = target.get_lookup(lookup_type)
-    #
-    #         file_constraint = lookup_class(Col(self.model._meta.db_table, target, target), raw_value)
-    #
-    #         null_constraint = super(GenericForeignFileField, self).get_lookup_constraint(
-    #             constraint_class, alias, targets, sources, ['isnull'], True)
-    #
-    #         root_constraint.add(file_constraint, AND)
-    #         root_constraint.add(null_constraint, AND)
-    #         return root_constraint
-    #         #
-    #         # file_field = self.rel.to._meta.get_field_by_name(self.rel_file_field_name)[0]
-    #         # return super(GenericForeignFileField, self).get_lookup_constraint(
-    #         #     constraint_class, alias, (file_field, ), (file_field, ), lookups, raw_value)
-
-
 class GenericForeignFileDescriptor(object):
 
     def __init__(self, field, file_field, is_file_field=False, for_concrete_model=True):
