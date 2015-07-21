@@ -2,6 +2,7 @@ import six
 
 from six.moves import xrange
 
+import django
 from django import forms
 from django.contrib.admin.widgets import AdminFileWidget
 from django.core import validators
@@ -140,11 +141,15 @@ def generic_fk_file_formfield_factory(widget=None, related=None, **attrs):
 class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
 
     extra_fields = None
-    min_num = 1
     max_num = 1
     can_order = False
     can_delete = True
-    extra = 0
+    if django.VERSION > (1, 7):
+        min_num = 1
+        extra = 0
+    else:
+        min_num = 0
+        extra = 1
     label = "Upload"
     prefix_override = None
 
