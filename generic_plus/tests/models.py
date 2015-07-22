@@ -59,3 +59,23 @@ class TestGenericPlusModel(models.Model):
 
     class Meta:
         app_label = "generic_plus"
+
+
+class SecondTestGenericPlusModel(models.Model):
+
+    slug = models.SlugField()
+    test_file = TestField(upload_to="test")
+
+    class Meta:
+        app_label = "generic_plus"
+
+
+class OtherGenericRelatedModel(models.Model):
+
+    content_type = models.ForeignKey(ContentType)
+    object_id = models.PositiveIntegerField(null=True, blank=True)
+    content_object = GenericForeignKey('content_type', 'object_id')
+    slug = models.SlugField()
+
+    class Meta:
+        app_label = "generic_plus"

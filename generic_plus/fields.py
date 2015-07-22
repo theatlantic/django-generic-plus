@@ -3,6 +3,7 @@ Defines GenericForeignFileField, a subclass of GenericRelation from
 django.contrib.contenttypes.
 """
 import six
+import itertools
 from six.moves import reduce
 
 import operator
@@ -261,6 +262,30 @@ class GenericForeignFileField(GenericRelation):
         return hasattr(instance, self.get_cache_name())
 
     def get_prefetch_queryset(self, instances, queryset=None):
+        get_gplus_field = lambda i: getattr(i.__class__, self.name)
+
+        fields = set([get_gplus_field(i) for i in instances])
+
+        # Handle case where instances have different fields (and consequently,
+        # different content types)
+        if len(fields) > 1:
+            bulk_qsets = []
+            for field, group in itertools.groupby(instances, get_gplus_field):
+                field_instances = list(group)
+                bulk_qsets.append(field.bulk_related_objects(field_instances))
+            bulk_qset = reduce(operator.or_, bulk_qsets)
+
+            def rel_obj_attr(rel_obj):
+                content_type = getattr(rel_obj, "%s_id" % self.content_type_field_name)
+                object_id = getattr(rel_obj, self.object_id_field_name)
+                return (content_type, object_id)
+
+            return (bulk_qset,
+                rel_obj_attr,
+                lambda obj: (ContentType.objects.get_for_model(obj).pk, obj._get_pk_val()),
+                True,
+                self.attname)
+
         return (self.bulk_related_objects(instances),
             operator.attrgetter(self.object_id_field_name),
             lambda obj: obj._get_pk_val(),

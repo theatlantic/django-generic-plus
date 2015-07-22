@@ -3,8 +3,10 @@ import shutil
 
 from django import test
 from django.conf import settings
+from django.contrib.contenttypes.models import ContentType
 
-from .models import TestGenericPlusModel, TestM2M, TestFileModel
+from .models import (TestGenericPlusModel, TestM2M, TestFileModel,
+    SecondTestGenericPlusModel, OtherGenericRelatedModel)
 
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
@@ -69,3 +71,17 @@ class TestModels(test.TestCase):
                 self.assertEqual(num, expected_num,
                     "Incorrect number of items (expected %d) returned for m2m of %s" %
                         (expected_num, item.slug))
+
+    def test_multilevel_generic_prefetch_related(self):
+        a = TestGenericPlusModel.objects.create(slug='gp-a', test_file="test/foo.txt")
+        b = SecondTestGenericPlusModel.objects.create(slug='gp-b', test_file="test/bar.txt")
+        TestFileModel.objects.create(content_object=a, file='test/foo.txt')
+        TestFileModel.objects.create(content_object=b, file='test/bar.txt')
+        OtherGenericRelatedModel.objects.create(content_object=a, slug='gp-a')
+        OtherGenericRelatedModel.objects.create(content_object=b, slug='gp-b')
+
+        qset = OtherGenericRelatedModel.objects.all().prefetch_related('content_object__test_file')
+        with self.assertNumQueries(6):
+            for instance in qset:
+                self.assertNotEqual(instance.content_object.test_file.related_object, None)
+                self.assertEqual(instance.content_object.test_file.related_object.content_object.slug, instance.slug)
