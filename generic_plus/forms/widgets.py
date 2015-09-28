@@ -125,7 +125,7 @@ class GenericForeignFileWidget(Input):
             'prefix': name,
         }
         if instance:
-            formset_kwargs['instance'] = instance.content_object
+            formset_kwargs['instance'] = bound_field.form.instance
             qs = instance.__class__._default_manager
             if self.field.field_identifier_field_name:
                 field_identifier = getattr(instance, self.field.field_identifier_field_name)
