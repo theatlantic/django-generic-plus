@@ -5,9 +5,9 @@ from six.moves import xrange
 import django
 from django import forms
 from django.contrib.admin.widgets import AdminFileWidget
+from django.contrib.contenttypes.models import ContentType
 from django.core import validators
 from django.core.files.uploadedfile import UploadedFile
-from django.db import models
 from django.db.models.fields.files import FieldFile
 from django.forms.forms import BoundField
 from django.forms.formsets import TOTAL_FORM_COUNT
@@ -192,6 +192,18 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
             return cls.prefix_override
         else:
             return super(BaseGenericFileInlineFormSet, cls).get_default_prefix()
+
+    def save_new(self, form, commit=True):
+        """
+        Identical to the parent method, except `get_for_model` is passed
+        `for_concrete_model=self.for_concrete_model`.
+        """
+        setattr(form.instance, self.ct_field.get_attname(),
+            ContentType.objects.get_for_model(self.instance,
+                    for_concrete_model=self.for_concrete_model).pk)
+        setattr(form.instance, self.ct_fk_field.get_attname(),
+            self.instance.pk)
+        return form.save(commit=commit)
 
     def save_existing_objects(self, commit=True):
         """

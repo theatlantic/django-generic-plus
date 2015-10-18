@@ -239,14 +239,15 @@ class GenericForeignFileField(GenericRelation):
                 cls.add_to_class(self.file_field_name, self.file_field)
 
         # Add the descriptor for the generic relation
-        generic_descriptor = GenericForeignFileDescriptor(self, self.file_field)
+        generic_descriptor = GenericForeignFileDescriptor(self, self.file_field,
+            for_concrete_model=self.for_concrete_model)
         # We use self.__dict__ to avoid triggering __get__()
         self.__dict__['generic_descriptor'] = generic_descriptor
         setattr(cls, self.generic_rel_name, generic_descriptor)
 
         # Add the descriptor for the FileField
         file_descriptor = GenericForeignFileDescriptor(self, self.file_field,
-            is_file_field=True)
+            is_file_field=True, for_concrete_model=self.for_concrete_model)
         self.__dict__['file_descriptor'] = file_descriptor
         setattr(cls, self.file_field_name, file_descriptor)
 
@@ -280,9 +281,20 @@ class GenericForeignFileField(GenericRelation):
                 object_id = getattr(rel_obj, self.object_id_field_name)
                 return (content_type, object_id)
 
+            def get_ctype_obj_id(obj):
+                try:
+                    content_type = ContentType.objects.get_for_model(obj, self.for_concrete_model)
+                except TypeError:
+                    # Django <= 1.5
+                    if not self.for_concrete_model:
+                        raise
+                    else:
+                        content_type = ContentType.objects.get_for_model(obj)
+                return (content_type.pk, obj._get_pk_val())
+
             return (bulk_qset,
                 rel_obj_attr,
-                lambda obj: (ContentType.objects.get_for_model(obj).pk, obj._get_pk_val()),
+                get_ctype_obj_id,
                 True,
                 self.attname)
 
