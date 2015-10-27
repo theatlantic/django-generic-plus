@@ -287,7 +287,7 @@ class GenericForeignFileField(GenericRelation):
                     content_type = ContentType.objects.get_for_model(obj, field.for_concrete_model)
                 except TypeError:
                     # Django <= 1.5
-                    if not self.for_concrete_model:
+                    if not field.for_concrete_model:
                         raise
                     else:
                         content_type = ContentType.objects.get_for_model(obj)
