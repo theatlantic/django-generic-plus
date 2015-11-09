@@ -263,17 +263,16 @@ class GenericForeignFileField(GenericRelation):
         return hasattr(instance, self.get_cache_name())
 
     def get_prefetch_queryset(self, instances, queryset=None):
-        get_gplus_field = lambda i: getattr(i.__class__, self.name)
+        models = set([type(i) for i in instances])
 
-        fields = set([get_gplus_field(i) for i in instances])
-
-        # Handle case where instances have different fields (and consequently,
+        # Handle case where instances are different models (and consequently,
         # different content types)
-        if len(fields) > 1:
+        if len(models) > 1:
             bulk_qsets = []
-            for field, group in itertools.groupby(instances, get_gplus_field):
-                field_instances = list(group)
-                bulk_qsets.append(field.bulk_related_objects(field_instances))
+            for model, group in itertools.groupby(instances, type):
+                model_instances = list(group)
+                field = getattr(model, self.name)
+                bulk_qsets.append(field.bulk_related_objects(model_instances))
             bulk_qset = reduce(operator.or_, bulk_qsets)
 
             def rel_obj_attr(rel_obj):
@@ -282,7 +281,7 @@ class GenericForeignFileField(GenericRelation):
                 return (content_type, object_id)
 
             def get_ctype_obj_id(obj):
-                field = get_gplus_field(obj)
+                field = getattr(obj.__class__, self.name)
                 try:
                     content_type = ContentType.objects.get_for_model(obj, field.for_concrete_model)
                 except TypeError:
