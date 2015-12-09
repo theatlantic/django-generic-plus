@@ -10,7 +10,7 @@ except ImportError:
 
 setup(
     name='django-generic-plus',
-    version="1.2.27",
+    version="1.2.28",
     install_requires=[
         'six>=1.7.0',
     ],
