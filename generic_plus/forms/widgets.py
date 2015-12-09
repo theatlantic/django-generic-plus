@@ -84,7 +84,6 @@ class GenericForeignFileWidget(Input):
         final_attrs['value'] = value or ''
 
         formset = self.get_inline_admin_formset(name, value, instance=obj, bound_field=bound_field)
-
         return {
             'instance': obj,
             'value': value,

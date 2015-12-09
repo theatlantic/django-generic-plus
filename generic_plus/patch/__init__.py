@@ -119,13 +119,14 @@ def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=Non
         old_init(self, *args, **kwargs)
 
     @monkeypatch(ModelAdmin)
-    def get_inline_instances(old_func, self, request, *args):
+    def get_inline_instances(old_func, self, request, obj=None):
         """
         Skip generic-plus inlines if the field is not in fieldsets.
         Failing to do so causes ManagementForm validation errors on save.
         """
+        args = [obj] if obj else []
         inline_instances = old_func(self, request, *args)
-        fieldsets = flatten_fieldsets(self.get_fieldsets(request))
+        fieldsets = flatten_fieldsets(self.get_fieldsets(request, obj=obj))
 
         def skip_inline_instance(inline):
             f = getattr(inline, 'field', None)
