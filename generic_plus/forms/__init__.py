@@ -198,9 +198,16 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
         `for_concrete_model=self.for_concrete_model`.
         """
         from django.contrib.contenttypes.models import ContentType
-        setattr(form.instance, self.ct_field.get_attname(),
-            ContentType.objects.get_for_model(self.instance,
-                    for_concrete_model=self.for_concrete_model).pk)
+        try:
+            content_type = ContentType.objects.get_for_model(self.instance,
+                for_concrete_model=self.for_concrete_model)
+        except TypeError:
+            # Django <= 1.5
+            if not self.for_concrete_model:
+                raise
+            else:
+                content_type = ContentType.objects.get_for_model(self.instance)
+        setattr(form.instance, self.ct_field.get_attname(), content_type.pk)
         setattr(form.instance, self.ct_fk_field.get_attname(),
             self.instance.pk)
         return form.save(commit=commit)
