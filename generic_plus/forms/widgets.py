@@ -2,6 +2,7 @@ import six
 
 import re
 
+import django
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.forms.widgets import Input
 from django.conf import settings
@@ -26,7 +27,10 @@ class GenericForeignFileWidget(Input):
         related = getattr(formfield, 'related', None)
         dbfield = getattr(related, 'field', None)
         file_field = getattr(dbfield, 'file_field', None)
-        rel_model = getattr(getattr(dbfield, 'rel', None), 'to', None)
+        if django.VERSION > (1, 9):
+            rel_model = getattr(getattr(dbfield, 'remote_field', None), 'model', None)
+        else:
+            rel_model = getattr(getattr(dbfield, 'rel', None), 'to', None)
 
         obj = None
         file_value = ''

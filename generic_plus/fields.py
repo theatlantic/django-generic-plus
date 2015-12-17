@@ -156,11 +156,14 @@ class GenericForeignFileField(GenericRelation):
             'max_length': self.file_kwargs['max_length'],
         })
 
+        if django.VERSION > (1, 9):
+            kwargs['on_delete'] = models.CASCADE
+
         if isinstance(self, ForeignObject):
             # Django 1.6
             super(GenericRelation, self).__init__(
-                to, to_fields=[],
-                from_fields=[self.object_id_field_name], **kwargs)
+                to,
+                from_fields=[self.object_id_field_name], to_fields=[], **kwargs)
         else:
             # Django <= 1.5
             models.Field.__init__(self, **kwargs)
@@ -410,9 +413,11 @@ class GenericForeignFileField(GenericRelation):
             instance.save()
 
     def formfield(self, **kwargs):
-        factory_kwargs = {
-            'related': getattr(self, 'related', None),
-        }
+        factory_kwargs = {}
+        if django.VERSION > (1, 9):
+            factory_kwargs['related'] = getattr(self, 'remote_field', None)
+        else:
+            factory_kwargs['related'] = getattr(self, 'related', None)
         widget = kwargs.pop('widget', None) or generic_fk_file_widget_factory(**factory_kwargs)
         formfield = kwargs.pop('form_class', None) or generic_fk_file_formfield_factory(widget=widget, **factory_kwargs)
         widget.parent_admin = formfield.parent_admin = kwargs.pop('parent_admin', None)
