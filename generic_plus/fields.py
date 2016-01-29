@@ -416,6 +416,8 @@ class GenericForeignFileField(GenericRelation):
         factory_kwargs = {}
         if django.VERSION > (1, 9):
             factory_kwargs['related'] = getattr(self, 'remote_field', None)
+        elif django.VERSION > (1, 8):
+            factory_kwargs['related'] = getattr(self, 'rel', None)
         else:
             factory_kwargs['related'] = getattr(self, 'related', None)
         widget = kwargs.pop('widget', None) or generic_fk_file_widget_factory(**factory_kwargs)
