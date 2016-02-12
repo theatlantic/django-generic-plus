@@ -54,6 +54,11 @@ from generic_plus.forms import (
     generic_fk_file_formfield_factory, generic_fk_file_widget_factory)
 
 
+dj19 = bool(django.VERSION >= (1, 9))
+compat_rel = lambda f: getattr(f, 'remote_field' if dj19 else 'rel')
+compat_rel_to = lambda f: getattr(compat_rel(f), 'model' if dj19 else 'to')
+
+
 class GenericForeignFileField(GenericRelation):
     """
     The base class for GenericForeignFileField; adds descriptors to the model.
@@ -352,8 +357,9 @@ class GenericForeignFileField(GenericRelation):
         about the reason this is overridden here.
         """
         self.south_executing = False
-        if self.rel is None and hasattr(self, '_rel'):
-            self.rel = self._rel
+        if django.VERSION < (1, 8):
+            if self.rel is None and hasattr(self, '_rel'):
+                self.rel = self._rel
         return []
 
     def get_internal_type(self):
@@ -442,7 +448,7 @@ class GenericForeignFileField(GenericRelation):
         formset_cls = formset_cls or BaseGenericFileInlineFormSet
 
         attrs = {
-            'model': self.rel.to,
+            'model': compat_rel_to(self),
             'default_prefix': self.name,
             'field': self,
             'formset_kwargs': kwargs.pop('formset_kwargs', None) or {},
@@ -520,7 +526,7 @@ class GenericForeignFileDescriptor(object):
 
         # Dynamically create a class that subclasses the related model's
         # default manager.
-        rel_model = self.field.rel.to
+        rel_model = compat_rel_to(self.field)
         superclass = rel_model._default_manager.__class__
         RelatedManager = create_generic_related_manager(superclass)
 
@@ -530,9 +536,9 @@ class GenericForeignFileDescriptor(object):
             'prefetch_cache_name': self.field.attname,
         }
 
-        if hasattr(self.field.rel, 'symmetrical'):
+        if hasattr(compat_rel(self.field), 'symmetrical'):
             # Django <= 1.5
-            manager_kwargs['symmetrical'] = (self.field.rel.symmetrical and instance.__class__ == rel_model)
+            manager_kwargs['symmetrical'] = (compat_rel(self.field).symmetrical and instance.__class__ == rel_model)
 
         if hasattr(self.field, 'get_joining_columns'):
             join_cols = self.field.get_joining_columns(reverse_join=True)[0]
@@ -571,7 +577,7 @@ class GenericForeignFileDescriptor(object):
                 val = getattr(instance, cache_name)
             except AttributeError:
                 db = manager._db or router.db_for_read(rel_model, instance=instance)
-                if django.VERSION < (1, 7):
+                if django.VERSION < (1, 6):
                     qset = superclass.get_query_set(manager).using(db)
                 else:
                     qset = superclass.get_queryset(manager).using(db)
@@ -610,9 +616,9 @@ class GenericForeignFileDescriptor(object):
             instance.__dict__[self.file_field.name] = value
             return
 
-        if isinstance(obj, self.field.rel.to):
+        if isinstance(obj, compat_rel_to(self.field)):
             value = getattr(obj, self.field.rel_file_field_name)
-        elif isinstance(value, self.field.rel.to):
+        elif isinstance(value, compat_rel_to(self.field)):
             obj = value
             value = getattr(obj, self.field.rel_file_field_name)
 
@@ -642,7 +648,7 @@ class GenericForeignFileDescriptor(object):
         if instance is None:
             raise AttributeError("Manager must be accessed via instance")
 
-        if isinstance(value, self.field.rel.to) or value is None:
+        if isinstance(value, compat_rel_to(self.field)) or value is None:
             setattr(instance, self.field.get_cache_name(), value)
 
         if self.is_file_field:
@@ -652,7 +658,7 @@ class GenericForeignFileDescriptor(object):
             manager.clear()
             if value is None:
                 return
-            if isinstance(value, self.field.rel.to):
+            if isinstance(value, compat_rel_to(self.field)):
                 rel_obj_file = getattr(value, self.field.rel_file_field_name)
                 file_val = rel_obj_file.path if rel_obj_file else None
                 setattr(instance, self.field.file_field_name, file_val)
@@ -712,12 +718,12 @@ def create_generic_related_manager(superclass):
                 ('%s__pk' % self.content_type_field_name): self.content_type.id,
                 ('%s__exact' % self.object_id_field_name): self.pk_val,
             }
-            if django.VERSION < (1, 7):
+            if django.VERSION < (1, 6):
                 return superclass.get_query_set(self).using(db).filter(**query)
             else:
                 return superclass.get_queryset(self).using(db).filter(**query)
 
-        if django.VERSION < (1, 7):
+        if django.VERSION < (1, 6):
             get_query_set = get_queryset
 
         def get_prefetch_queryset(self, instances, queryset=None):
@@ -726,7 +732,7 @@ def create_generic_related_manager(superclass):
                 ('%s__pk' % self.content_type_field_name): self.content_type.id,
                 ('%s__in' % self.object_id_field_name): set(obj._get_pk_val() for obj in instances),
             }
-            if django.VERSION < (1, 7):
+            if django.VERSION < (1, 6):
                 qs = super(GenericRelatedObjectManager, self).get_query_set()
             else:
                 qs = super(GenericRelatedObjectManager, self).get_queryset()

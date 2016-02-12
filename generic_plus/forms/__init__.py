@@ -298,7 +298,10 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
 def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFormSet,
         form_attrs=None, formset_attrs=None, formfield_callback=None, prefix=None,
         for_concrete_model=True):
-    model = field.rel.to
+    if django.VERSION < (1, 9):
+        model = field.rel.to
+    else:
+        model = field.remote_field.model
     ct_field = model._meta.get_field(field.content_type_field_name)
     ct_fk_field = model._meta.get_field(field.object_id_field_name)
     exclude = [ct_field.name, ct_fk_field.name]

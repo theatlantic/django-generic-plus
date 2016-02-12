@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 import os
 import sys
-
+import warnings
 
 os.environ['DJANGO_SETTINGS_MODULE'] = 'generic_plus.tests.settings'
 
 
 import django
 from django.core.management import execute_from_command_line
+
+
+warnings.simplefilter('default')
 
 
 # Give feedback on used versions
