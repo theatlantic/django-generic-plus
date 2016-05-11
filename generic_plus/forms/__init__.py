@@ -7,11 +7,17 @@ from django import forms
 from django.contrib.admin.widgets import AdminFileWidget
 from django.core import validators
 from django.core.files.uploadedfile import UploadedFile
+from django.db import models
 from django.db.models.fields.files import FieldFile
 from django.forms.forms import BoundField
 from django.forms.formsets import TOTAL_FORM_COUNT
 from django.forms.models import modelform_factory
 from django.utils.translation import ungettext
+
+try:
+    from django.utils.encoding import force_text
+except ImportError:
+    from django.utils.encoding import force_unicode as force_text
 
 try:
     # Django 1.8+
@@ -192,6 +198,77 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
         else:
             return super(BaseGenericFileInlineFormSet, cls).get_default_prefix()
 
+    def save(self, commit=True):
+        """
+        Saves model instances for every form, adding and changing instances
+        as necessary, and returns the list of instances.
+        """
+        self.changed_objects = []
+        self.deleted_objects = []
+        self.new_objects = []
+
+        # Copied lines are from BaseModelFormSet.save()
+        if not commit:
+            self.saved_forms = []
+            def save_m2m():
+                for form in self.saved_forms:
+                    form.save_m2m()
+            self.save_m2m = save_m2m
+        # End copied lines from BaseModelFormSet.save()
+
+        # The above if clause is the entirety of BaseModelFormSet.save(),
+        # along with the following return:
+        # return self.save_existing_objects(commit) + self.save_new_objects(commit)
+
+        initial_form_count = self.initial_form_count()
+        forms = []
+        for i, form in enumerate(self.forms):
+            form._is_initial = bool(i < initial_form_count)
+            forms.append(form)
+
+        form_instances = []
+        saved_instances = []
+
+        for form in forms:
+            instance = self.get_saved_instance_for_form(form, commit, form_instances)
+            if instance is not None:
+                # Store saved instances so we can reference it for
+                # sub-instanced nested beneath not-yet-saved instances.
+                saved_instances += [instance]
+            else:
+                instance = form.instance
+            if not self._should_delete_form(form):
+                form_instances.append(instance)
+
+        return saved_instances
+
+    def get_saved_instance_for_form(self, form, commit, form_instances=None):
+        pk_name = None
+        if form.instance and form.instance._meta.pk:
+            pk_name = form.instance._meta.pk.name
+        pk_val = None
+        if not form.errors and hasattr(form, 'cleaned_data'):
+            pk_val = form.cleaned_data.get(pk_name)
+        # Inherited models will show up as instances of the parent in
+        # cleaned_data
+        if isinstance(pk_val, models.Model):
+            pk_val = pk_val.pk
+        if pk_val is not None:
+            try:
+                setattr(form.instance, pk_name, pk_val)
+            except ValueError:
+                pk_attname = form.instance._meta.pk.get_attname()
+                setattr(form.instance, pk_attname, pk_val)
+
+        if form._is_initial:
+            instances = self.save_existing_objects([form], commit)
+        else:
+            instances = self.save_new_objects([form], commit)
+        if len(instances):
+            return instances[0]
+        else:
+            return None
+
     def save_new(self, form, commit=True):
         """
         Identical to the parent method, except `get_for_model` is passed
@@ -212,19 +289,64 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
             self.instance.pk)
         return form.save(commit=commit)
 
-    def save_existing_objects(self, commit=True):
+    def save_existing(self, form, instance, commit=True):
+        from django.contrib.contenttypes.models import ContentType
+        try:
+            content_type = ContentType.objects.get_for_model(self.instance,
+                for_concrete_model=self.for_concrete_model)
+        except TypeError:
+            # Django <= 1.5
+            if not self.for_concrete_model:
+                raise
+            else:
+                content_type = ContentType.objects.get_for_model(self.instance)
+        setattr(form.instance, self.ct_field.get_attname(), content_type.pk)
+        setattr(form.instance, self.ct_fk_field.get_attname(), self.instance.pk)
+        return form.save(commit=commit)
+
+    def get_queryset(self):
+        if not self.data:
+            return super(BaseGenericFileInlineFormSet, self).get_queryset()
+
+        if not hasattr(self, '__queryset'):
+            pk_keys = ["%s-%s" % (self.add_prefix(i), self.model._meta.pk.name)
+                       for i in xrange(0, self.initial_form_count())]
+            pk_vals = [self.data.get(pk_key) for pk_key in pk_keys if self.data.get(pk_key)]
+
+            mgr = self.model._default_manager
+            if hasattr(mgr, 'get_queryset'):
+                # Django 1.6
+                qs = mgr.get_queryset()
+            else:
+                # Django <= 1.5
+                qs = mgr.get_query_set()
+
+            qs = qs.filter(pk__in=pk_vals)
+
+            # If the queryset isn't already ordered we need to add an
+            # artificial ordering here to make sure that all formsets
+            # constructed from this queryset have the same form order.
+            if not qs.ordered:
+                qs = qs.order_by(self.model._meta.pk.name)
+
+            self.__queryset = qs
+        return self.__queryset
+
+    def save_existing_objects(self, initial_forms=None, commit=True):
         """
-        Identical to the parent method, except for the try/except ValidationError
-        logic inside the self.initial_forms for loop.
+        Identical to parent class, except ``self.initial_forms`` is replaced
+        with ``initial_forms``, passed as parameter.
         """
-        self.changed_objects = []
-        self.deleted_objects = []
-        if not self.initial_forms:
+        from django.contrib.contenttypes.models import ContentType
+
+        if not initial_forms:
             return []
 
         saved_instances = []
 
-        for form in self.initial_forms:
+        forms_to_delete = self.deleted_forms
+
+        for form in initial_forms:
             pk_name = self._pk_field.name
 
             if not hasattr(form, '_raw_value'):
@@ -236,33 +358,84 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
 
             # clean() for different types of PK fields can sometimes return
             # the model instance, and sometimes the PK. Handle either.
-            try:
-                pk_value = form.fields[pk_name].clean(raw_pk_value)
-            except forms.ValidationError:
-                # If a ValidationError was caused by a DoesNotExist error,
-                # this means that the object was deleted in another formset's
-                # save (e.g., if a generic foreign file field inline was attached
-                # to another inline, in a nested fashion)
+            if self._should_delete_form(form):
+                pk_value = raw_pk_value
+            else:
                 try:
-                    pk_value = self.model.objects.get(**{pk_name: raw_pk_value})
-                except self.model.DoesNotExist:
+                    pk_value = form.fields[pk_name].clean(raw_pk_value)
+                except ValidationError:
+                    # The current form's instance was initially nested under
+                    # a form that was deleted, which causes the pk clean to
+                    # fail (because the instance has been deleted). To get
+                    # around this we clear the pk and save it as if it were new.
+                    form.data[form.add_prefix(pk_name)] = ''
+                    saved_instances.extend(self.save_new_objects([form], commit))
                     continue
-                else:
-                    raise
+                pk_value = getattr(pk_value, 'pk', pk_value)
 
-            pk_value = getattr(pk_value, 'pk', pk_value)
+            obj = None
+            if obj is None and form.instance and pk_value:
+                model_cls = form.instance.__class__
+                try:
+                    obj = model_cls.objects.get(pk=pk_value)
+                except model_cls.DoesNotExist:
+                    if pk_value and force_text(form.instance.pk) == force_text(pk_value):
+                        obj = form.instance
+            if obj is None:
+                obj = self._existing_object(pk_value)
 
-            obj = self._existing_object(pk_value)
-            if self.can_delete and self._should_delete_form(form):
+            if form in forms_to_delete:
                 self.deleted_objects.append(obj)
-                obj.delete()
+                if hasattr(self, 'delete_existing'):
+                    self.delete_existing(obj, commit=commit)
+                else:
+                    if commit:
+                        obj.delete()
                 continue
-            if form.has_changed():
-                self.changed_objects.append((obj, form.changed_data))
-                saved_instances.append(self.save_existing(form, obj, commit=commit))
-                if not commit:
-                    self.saved_forms.append(form)
+
+            # fk_val: The value one should find in the form's foreign key field
+            old_ct_val = ct_val = ContentType.objects.get_for_model(self.instance.__class__).pk
+            old_fk_val = fk_val = self.instance.pk
+            if form.instance.pk:
+                original_instance = self.model.objects.get(pk=form.instance.pk)
+                fk_field = getattr(self, 'fk', getattr(self, 'ct_fk_field', None))
+                if fk_field:
+                    old_fk_val = getattr(original_instance, fk_field.get_attname())
+                ct_field = getattr(self, 'ct_field', None)
+                if ct_field:
+                    old_ct_val = getattr(original_instance, ct_field.get_attname())
+
+            if form.has_changed() or fk_val != old_fk_val or ct_val != old_ct_val:
+               self.changed_objects.append((obj, form.changed_data))
+               saved_instances.append(self.save_existing(form, obj, commit=commit))
+               if not commit:
+                   self.saved_forms.append(form)
         return saved_instances
+
+    def save_new_objects(self, extra_forms=None, commit=True):
+        """
+        Identical to parent class, except ``self.extra_forms`` is replaced
+        with ``extra_forms``, passed as parameter, and self.new_objects is
+        replaced with ``new_objects``.
+        """
+        new_objects = []
+
+        if extra_forms is None:
+            return new_objects
+
+        for form in extra_forms:
+            if not form.has_changed():
+                continue
+            # If someone has marked an add form for deletion, don't save the
+            # object.
+            if self.can_delete and self._should_delete_form(form):
+                continue
+            new_objects.append(self.save_new(form, commit=commit))
+            if not commit:
+                self.saved_forms.append(form)
+
+        self.new_objects.extend(new_objects)
+        return new_objects
 
     def full_clean(self):
         """
