@@ -1,37 +1,19 @@
-import six
-
-from six.moves import xrange
-
 import django
 from django import forms
 from django.contrib.admin.widgets import AdminFileWidget
+from django.contrib.contenttypes.forms import BaseGenericInlineFormSet
 from django.core import validators
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
 from django.db import models
 from django.db.models.fields.files import FieldFile
 from django.forms.forms import BoundField
-from django.forms.formsets import TOTAL_FORM_COUNT
-from django.forms.models import modelform_factory
+from django.forms.formsets import TOTAL_FORM_COUNT, DEFAULT_MAX_NUM
+from django.forms.models import modelform_factory, ModelFormMetaclass
+from django.utils.encoding import force_text
+from django.utils import six
+from django.utils.six.moves import range
 from django.utils.translation import ungettext
-
-try:
-    from django.utils.encoding import force_text
-except ImportError:
-    from django.utils.encoding import force_unicode as force_text
-
-try:
-    # Django 1.8+
-    from django.contrib.contenttypes.forms import BaseGenericInlineFormSet
-except ImportError:
-    from django.contrib.contenttypes.generic import BaseGenericInlineFormSet
-
-try:
-    from django.forms.formsets import DEFAULT_MAX_NUM
-except ImportError:
-    DEFAULT_MAX_NUM = 1000
-
-from django.forms.models import ModelFormMetaclass
-from django.core.exceptions import ValidationError
 
 from .widgets import generic_fk_file_widget_factory, GenericForeignFileWidget
 
@@ -149,12 +131,8 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
     max_num = 1
     can_order = False
     can_delete = True
-    if django.VERSION > (1, 7):
-        min_num = 1
-        extra = 0
-    else:
-        min_num = 0
-        extra = 1
+    min_num = 1
+    extra = 0
     label = "Upload"
     prefix_override = None
 
@@ -275,15 +253,8 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
         `for_concrete_model=self.for_concrete_model`.
         """
         from django.contrib.contenttypes.models import ContentType
-        try:
-            content_type = ContentType.objects.get_for_model(self.instance,
-                for_concrete_model=self.for_concrete_model)
-        except TypeError:
-            # Django <= 1.5
-            if not self.for_concrete_model:
-                raise
-            else:
-                content_type = ContentType.objects.get_for_model(self.instance)
+        content_type = ContentType.objects.get_for_model(self.instance,
+            for_concrete_model=self.for_concrete_model)
         setattr(form.instance, self.ct_field.get_attname(), content_type.pk)
         setattr(form.instance, self.ct_fk_field.get_attname(),
             self.instance.pk)
@@ -291,15 +262,8 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
 
     def save_existing(self, form, instance, commit=True):
         from django.contrib.contenttypes.models import ContentType
-        try:
-            content_type = ContentType.objects.get_for_model(self.instance,
-                for_concrete_model=self.for_concrete_model)
-        except TypeError:
-            # Django <= 1.5
-            if not self.for_concrete_model:
-                raise
-            else:
-                content_type = ContentType.objects.get_for_model(self.instance)
+        content_type = ContentType.objects.get_for_model(self.instance,
+            for_concrete_model=self.for_concrete_model)
         setattr(form.instance, self.ct_field.get_attname(), content_type.pk)
         setattr(form.instance, self.ct_fk_field.get_attname(), self.instance.pk)
         return form.save(commit=commit)
@@ -310,18 +274,10 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
 
         if not hasattr(self, '__queryset'):
             pk_keys = ["%s-%s" % (self.add_prefix(i), self.model._meta.pk.name)
-                       for i in xrange(0, self.initial_form_count())]
+                       for i in range(0, self.initial_form_count())]
             pk_vals = [self.data.get(pk_key) for pk_key in pk_keys if self.data.get(pk_key)]
 
-            mgr = self.model._default_manager
-            if hasattr(mgr, 'get_queryset'):
-                # Django 1.6
-                qs = mgr.get_queryset()
-            else:
-                # Django <= 1.5
-                qs = mgr.get_query_set()
-
-            qs = qs.filter(pk__in=pk_vals)
+            qs = self.model._default_manager.get_queryset().filter(pk__in=pk_vals)
 
             # If the queryset isn't already ordered we need to add an
             # artificial ordering here to make sure that all formsets
@@ -386,11 +342,8 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
 
             if form in forms_to_delete:
                 self.deleted_objects.append(obj)
-                if hasattr(self, 'delete_existing'):
-                    self.delete_existing(obj, commit=commit)
-                else:
-                    if commit:
-                        obj.delete()
+                if commit:
+                    obj.delete()
                 continue
 
             # fk_val: The value one should find in the form's foreign key field
@@ -406,10 +359,10 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
                     old_ct_val = getattr(original_instance, ct_field.get_attname())
 
             if form.has_changed() or fk_val != old_fk_val or ct_val != old_ct_val:
-               self.changed_objects.append((obj, form.changed_data))
-               saved_instances.append(self.save_existing(form, obj, commit=commit))
-               if not commit:
-                   self.saved_forms.append(form)
+                self.changed_objects.append((obj, form.changed_data))
+                saved_instances.append(self.save_existing(form, obj, commit=commit))
+                if not commit:
+                    self.saved_forms.append(form)
         return saved_instances
 
     def save_new_objects(self, extra_forms=None, commit=True):
@@ -445,9 +398,9 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
         self._errors = []
         self._non_form_errors = self.error_class()
 
-        if not self.is_bound: # Stop further processing.
+        if not self.is_bound:  # Stop further processing.
             return
-        for i in xrange(0, self.total_form_count()):
+        for i in range(0, self.total_form_count()):
             form = self.forms[i]
             self._errors.append(form.errors)
         try:
@@ -462,7 +415,6 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
             # Give self.clean() a chance to do cross-form validation.
             self.clean()
         except ValidationError as e:
-
             if getattr(e, 'code', None) != 'missing_management_form':
                 if e.messages != [u'ManagementForm data is missing or has been tampered with']:
                     self._non_form_errors = self.error_class(e.messages)

@@ -1,5 +1,3 @@
-import six
-
 import re
 
 import django
@@ -10,6 +8,7 @@ from django.contrib.admin import helpers
 from django.contrib.admin.sites import site
 from django.db.models.fields.files import FieldFile
 from django.template.loader import render_to_string
+from django.utils import six
 
 
 class GenericForeignFileWidget(Input):

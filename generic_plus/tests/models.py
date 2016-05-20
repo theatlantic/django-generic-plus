@@ -1,11 +1,6 @@
-import django
+from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
-
-try:
-    from django.contrib.contenttypes.fields import GenericForeignKey
-except ImportError:
-    from django.contrib.contenttypes.generic import GenericForeignKey
 
 from .fields import TestField
 
@@ -47,16 +42,12 @@ class TestFileModel(models.Model):
         super(TestFileModel, self).save(**kwargs)
         model_class = self.content_type.model_class()
 
-        if django.VERSION >= (1, 8):
-            fields_with_models = [
-                (f, f.model if f.model != model_class else None)
-                for f in model_class._meta.get_fields()
-                if not f.is_relation
-                    or f.one_to_one
-                    or (f.many_to_one and f.related_model)
-            ]
-        else:
-            fields_with_models = model_class._meta.get_fields_with_model()
+        fields_with_models = [
+            (f, f.model if f.model != model_class else None)
+            for f in model_class._meta.get_fields()
+            if not f.is_relation
+                or f.one_to_one
+                or (f.many_to_one and f.related_model)]
 
         for field, field_model_class in fields_with_models:
             field_model_class = field_model_class or model_class

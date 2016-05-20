@@ -1,6 +1,6 @@
-from six.moves import filter
 import types
 
+from django.utils.six.moves import filter
 import monkeybiz
 
 
@@ -64,11 +64,7 @@ def patch_model_form():
 
 def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=None):
     from generic_plus.fields import GenericForeignFileField
-    try:
-        # Django 1.8+
-        from django.contrib.admin.utils import flatten_fieldsets
-    except ImportError:
-        from django.contrib.admin.util import flatten_fieldsets
+    from django.contrib.admin.utils import flatten_fieldsets
 
     if not BaseModelAdmin:
         from django.contrib.admin.options import BaseModelAdmin
@@ -80,11 +76,7 @@ def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=Non
     def get_generic_fk_file_fields_for_model(model):
         """Returns a list of GenericForeignFileFields on a given model"""
         opts = model._meta
-        if hasattr(opts, 'get_fields'):
-            # Django 1.8+
-            m2m_fields = [f for f in opts.get_fields() if f.many_to_many and not f.auto_created]
-        else:
-            m2m_fields = opts.many_to_many
+        m2m_fields = [f for f in opts.get_fields() if f.many_to_many and not f.auto_created]
         m2m_related_fields = set(m2m_fields + opts.virtual_fields)
         return [f for f in m2m_related_fields if isinstance(f, GenericForeignFileField)]
 
