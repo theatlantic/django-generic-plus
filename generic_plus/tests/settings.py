@@ -17,7 +17,7 @@ SECRET_KEY = 'z-i*xqqn)r0i7leak^#clq6y5j8&tfslp^a4duaywj2$**s*0_'
 
 TEMPLATES = [{
     'BACKEND': 'django.template.backends.django.DjangoTemplates',
-    'DIRS': [os.path.join(current_dir, 'templates')],
+    'DIRS': [os.path.join(current_dir, 'test_filefield', 'templates')],
     'APP_DIRS': True,
     'OPTIONS': {
         'context_processors': [
@@ -58,7 +58,6 @@ MIDDLEWARE_CLASSES = (
 )
 
 SITE_ID = 1
-ROOT_URLCONF = 'generic_plus.tests.urls'
 MEDIA_ROOT = os.path.join(temp_dir, 'media')
 MEDIA_URL = '/media/'
 STATIC_URL = '/static/'
