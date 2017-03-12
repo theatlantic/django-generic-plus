@@ -87,7 +87,7 @@ class GenericForeignFileField(GenericRelation):
         self.missing_file_fallback = missing_file_fallback
 
         self.file_kwargs = {
-            'editable': False,
+            'editable': True,
             'default': '',
             'blank': True,
             'upload_to': kwargs.pop('upload_to', None),
@@ -138,7 +138,9 @@ class GenericForeignFileField(GenericRelation):
         # Save a reference to which model this class is on for future use
         self.model = cls
 
-        super(GenericRelation, self).contribute_to_class(cls, name, virtual_only=True)
+        super(GenericRelation, self).contribute_to_class(cls, name, **{
+            ('private_only' if django.VERSION > (1, 10) else 'virtual_only'): True,
+        })
 
         self.column = self.file_kwargs['db_column']
 

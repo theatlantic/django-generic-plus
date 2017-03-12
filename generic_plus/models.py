@@ -77,7 +77,11 @@ def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=Non
         """Returns a list of GenericForeignFileFields on a given model"""
         opts = model._meta
         m2m_fields = [f for f in opts.get_fields() if f.many_to_many and not f.auto_created]
-        m2m_related_fields = set(m2m_fields + opts.virtual_fields)
+        if hasattr(opts, 'private_fields'):
+            private_fields = opts.private_fields
+        else:
+            private_fields = opts.virtual_fields
+        m2m_related_fields = set(m2m_fields + private_fields)
         return [f for f in m2m_related_fields if isinstance(f, GenericForeignFileField)]
 
     @monkeybiz.patch([ModelAdmin, InlineModelAdmin])
