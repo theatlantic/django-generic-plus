@@ -20,7 +20,12 @@ class GenericForeignFileWidget(Input):
         self.attrs = attrs.copy() if attrs is not None else {}
 
     def get_context_data(self, name, value, attrs=None, bound_field=None):
-        final_attrs = self.build_attrs(attrs, type=self.input_type, name=name)
+        attrs = attrs or {}
+        attrs.update({
+            'type': self.input_type,
+            'name': name,
+        })
+        final_attrs = self.build_attrs(attrs)
 
         formfield = getattr(bound_field, 'field', None)
         related = getattr(formfield, 'related', None)
