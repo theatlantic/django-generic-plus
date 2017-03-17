@@ -87,7 +87,7 @@ class GenericForeignFileField(GenericRelation):
         self.missing_file_fallback = missing_file_fallback
 
         self.file_kwargs = {
-            'editable': True,
+            'editable': (django.VERSION > (1, 10)),
             'default': '',
             'blank': True,
             'upload_to': kwargs.pop('upload_to', None),
