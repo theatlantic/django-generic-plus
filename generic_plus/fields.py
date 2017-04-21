@@ -19,13 +19,9 @@ from django.utils.six.moves import reduce
 from django.contrib.contenttypes.admin import GenericInlineModelAdmin
 from django.contrib.contenttypes.fields import GenericRelation, GenericRel
 
+from generic_plus.compat import compat_rel, compat_rel_to
 from generic_plus.forms import (
     generic_fk_file_formfield_factory, generic_fk_file_widget_factory)
-
-
-dj19 = bool(django.VERSION >= (1, 9))
-compat_rel = lambda f: getattr(f, 'remote_field' if dj19 else 'rel')
-compat_rel_to = lambda f: getattr(compat_rel(f), 'model' if dj19 else 'to')
 
 
 class GenericForeignFileField(GenericRelation):

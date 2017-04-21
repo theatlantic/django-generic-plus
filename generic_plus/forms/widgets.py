@@ -1,7 +1,7 @@
 import re
 
 import django
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+from django.core.exceptions import ObjectDoesNotExist
 from django.forms.widgets import Input
 from django.conf import settings
 from django.contrib.admin import helpers
@@ -9,6 +9,8 @@ from django.contrib.admin.sites import site
 from django.db.models.fields.files import FieldFile
 from django.template.loader import render_to_string
 from django.utils import six
+
+from generic_plus.compat import compat_rel_to
 
 
 class GenericForeignFileWidget(Input):
@@ -48,23 +50,19 @@ class GenericForeignFileWidget(Input):
                 file_value = getattr(obj, self.field.name).name
             value = getattr(obj, 'pk', None)
         elif rel_model and isinstance(value, six.string_types) and not value.isdigit():
-            try:
-                obj = rel_model.objects.get(**{self.field.rel_file_field_name: value})
-            except ObjectDoesNotExist:
-                obj = None
-                file_value = value
-                value = None
-            except MultipleObjectsReturned:
-                file_value = value
-                if bound_field and getattr(bound_field, 'form', None):
-                    if not bound_field.form.prefix or name.startswith(bound_field.form.prefix):
-                        formset_prefix = name
-                    else:
-                        formset_prefix = bound_field.form.add_prefix(name)
-                    value = bound_field.form.data.get("%s-0-id" % formset_prefix)
-            else:
-                file_value = value
-                value = obj.pk
+            file_value = value
+            if bound_field and getattr(bound_field, 'form', None):
+                if not bound_field.form.prefix or name.startswith(bound_field.form.prefix):
+                    formset_prefix = name
+                else:
+                    formset_prefix = bound_field.form.add_prefix(name)
+                generic_field = getattr(bound_field.db_file_field, 'generic_field', None)
+                if generic_field:
+                    pk_name = compat_rel_to(generic_field)._meta.pk.name
+                else:
+                    pk_name = 'id'
+                value = bound_field.form.data.get("%s-0-%s" % (
+                    formset_prefix, pk_name))
         if rel_model and isinstance(value, six.integer_types) or (isinstance(value, six.string_types) and value.isdigit()):
             if not obj or not file_value:
                 try:
