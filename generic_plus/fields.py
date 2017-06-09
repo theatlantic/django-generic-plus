@@ -11,13 +11,43 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import File
 from django.core.files.uploadedfile import UploadedFile
 from django.db import connection, router, models
+from django.db.models.deletion import DO_NOTHING
 from django.db.models.fields.files import FieldFile, FileDescriptor
+from django.db.models.fields.related import RelatedField, Field, ManyToOneRel
 from django.utils.functional import curry
 from django.utils import six
 from django.utils.six.moves import reduce
 
-from django.contrib.contenttypes.admin import GenericInlineModelAdmin
-from django.contrib.contenttypes.fields import GenericRelation, GenericRel
+try:
+    # Django 1.8+
+    from django.contrib.contenttypes.fields import GenericRelation
+except ImportError:
+    from django.contrib.contenttypes.generic import GenericRelation
+
+try:
+    # Django 1.8+
+    from django.contrib.contenttypes.admin import GenericInlineModelAdmin
+except ImportError:
+    from django.contrib.contenttypes.generic import GenericInlineModelAdmin
+
+try:
+    # Django 1.7+
+    from django.contrib.contenttypes.fields import GenericRel
+except ImportError:
+    from django.contrib.contenttypes.generic import GenericRel
+
+try:
+    from django.db.models.fields.related import ForeignObject, ForeignObjectRel
+except ImportError:
+    # Django <= 1.5
+    class ForeignObject(RelatedField, Field):
+        pass
+
+    class ForeignObjectRel(ManyToOneRel):
+        def __init__(self, field, to, **kwargs):
+            self.related_query_name = kwargs.pop('related_query_name', None)
+            self.field = field
+            super(ForeignObjectRel, self).__init__(to, self.field.name, **kwargs)
 
 from generic_plus.compat import compat_rel, compat_rel_to
 from generic_plus.forms import (
@@ -97,9 +127,20 @@ class GenericForeignFileField(GenericRelation):
             'height_field': kwargs.pop('height_field', None),
         }
 
-        kwargs['rel'] = GenericRel(self, to,
-            related_name=kwargs.pop('related_name', None),
-            limit_choices_to=kwargs.pop('limit_choices_to', None))
+        symmetrical = kwargs.pop('symmetrical', True)
+
+        if issubclass(GenericRel, ForeignObjectRel):
+            # Django 1.6
+            kwargs['rel'] = GenericRel(self, to,
+                related_name=kwargs.pop('related_name', None),
+                limit_choices_to=kwargs.pop('limit_choices_to', None))
+            kwargs['rel'].on_delete = DO_NOTHING
+        else:
+            # Django <= 1.5
+            kwargs['rel'] = GenericRel(to,
+                                related_name=kwargs.pop('related_name', None),
+                                limit_choices_to=kwargs.pop('limit_choices_to', None),
+                                symmetrical=symmetrical)
 
         # Override content-type/object-id field names on the related class
         self.object_id_field_name = kwargs.pop("object_id_field", "object_id")
@@ -118,27 +159,64 @@ class GenericForeignFileField(GenericRelation):
         if django.VERSION > (1, 9):
             kwargs['on_delete'] = models.CASCADE
 
-        super(GenericRelation, self).__init__(to,
-            from_fields=[self.object_id_field_name], to_fields=[], **kwargs)
+        if isinstance(self, ForeignObject):
+            # Django 1.6
+            super(GenericRelation, self).__init__(
+                to,
+                from_fields=[self.object_id_field_name], to_fields=[], **kwargs)
+        else:
+            # Django <= 1.5
+            models.Field.__init__(self, **kwargs)
 
         self.file_kwargs['db_column'] = kwargs.get('db_column', self.name)
+
+    if django.VERSION[:2] in ((1, 6), (1, 7)):
+        # Prior to Django 1.6, Model._meta.get_field_by_name() never returned
+        # virtual fields. django-generic-plus takes advantage of this fact in
+        # order to have _both_ a virtual field (the generic relation) and a
+        # local field (the FileField). In Django 1.6, get_field_by_name() will
+        # return the virtual field if the field has the 'related' attr. To get
+        # around this new inconvenience, we make an @property for related that
+        # raises an AttributeError while Model._meta.init_name_map() is being
+        # executed.
+        def do_related_class(self, other, cls):
+            from django.db.models.related import RelatedObject
+
+            self.set_attributes_from_rel()
+            self._related = RelatedObject(other, cls, self)
+            if not cls._meta.abstract:
+                self.contribute_to_related_class(other, self._related)
+
+        @property
+        def related(self):
+            if hasattr(self.model._meta, '_name_map') or not hasattr(self.model._meta, '_related_objects_cache'):
+                return self._related
+            elif django.VERSION[0:2] == (1, 7):
+                if hasattr(self.model._meta, '_related_objects_cache') and self._related not in self.model._meta._related_objects_cache:
+                    return self._related
+            raise AttributeError("'%s' object has no attribute 'related'" % type(self).__name__)
 
     def contribute_to_class(self, cls, name):
         self.generic_rel_name = '%s_generic_rel' % name
         self.raw_file_field_name = '%s_raw' % name
         self.file_field_name = name
 
-        self.set_attributes_from_name(name)
-        self.file_kwargs['db_column'] = self.db_column or self.attname
+        if hasattr(self, 'set_attributes_from_name'):
+            self.set_attributes_from_name(name)
+            self.file_kwargs['db_column'] = self.db_column or self.attname
 
         # Save a reference to which model this class is on for future use
         self.model = cls
 
-        super(GenericRelation, self).contribute_to_class(cls, name, **{
-            ('private_only' if django.VERSION > (1, 10) else 'virtual_only'): True,
-        })
+        if django.VERSION > (1, 7):
+            super(GenericRelation, self).contribute_to_class(cls, name, **{
+                ('private_only' if django.VERSION > (1, 10) else 'virtual_only'): True,
+            })
+        else:
+            super(GenericForeignFileField, self).contribute_to_class(cls, name)
 
-        self.column = self.file_kwargs['db_column']
+        if django.VERSION >= (1, 8):
+            self.column = self.file_kwargs['db_column']
 
         if not isinstance(self.file_field_cls, models.ImageField):
             self.file_kwargs.pop('width_field', None)
@@ -209,7 +287,14 @@ class GenericForeignFileField(GenericRelation):
 
             def get_ctype_obj_id(obj):
                 field = getattr(obj.__class__, self.name)
-                content_type = ContentType.objects.get_for_model(obj, field.for_concrete_model)
+                try:
+                    content_type = ContentType.objects.get_for_model(obj, field.for_concrete_model)
+                except TypeError:
+                    # Django <= 1.5
+                    if not field.for_concrete_model:
+                        raise
+                    else:
+                        content_type = ContentType.objects.get_for_model(obj)
                 return (content_type.pk, obj._get_pk_val())
 
             return (bulk_qset,
@@ -224,6 +309,9 @@ class GenericForeignFileField(GenericRelation):
             True,
             self.attname)
 
+    if django.VERSION < (1, 7):
+        get_prefetch_query_set = get_prefetch_queryset
+
     def bulk_related_objects(self, *args, **kwargs):
         """
         Return all objects related to ``objs`` via this ``GenericRelation``.
@@ -233,6 +321,72 @@ class GenericForeignFileField(GenericRelation):
         if self.field_identifier_field_name:
             qs = qs.filter(**{"%s__exact" % self.field_identifier_field_name: self.field_identifier})
         return qs
+
+    def south_init(self):
+        """
+        This method is called by south before it introspects the field.
+
+        South assumes that this is a related field if self.rel is set and it
+        is not None. While this is a reasonable assumption, and it is *mostly*
+        true for GenericForeignFileField, it is incorrect as far as South is
+        concerned; we need South to treat this as a FileField so that
+        it creates a column in the containing model.
+
+        To deal with this situation we conditionally return the same values as
+        FileField from get_internal_type() and db_type() while south is
+        introspecting the field, and otherwise return the values that would be
+        returned by a GenericRelation (which are the same as those returned
+        by a ManyToManyField)
+
+        self.south_executing is the basis for the conditional logic. It is set
+        to True in this method (south_init()) and then back to False in
+        GenericForeignFileField.post_create_sql().
+        """
+        self.south_executing = True
+        self._rel = self.rel
+        self.rel = None
+
+    def post_create_sql(self, style, db_table):
+        """
+        This method is called after south is done introspecting the field.
+
+        See GenericForeignFileField.south_init() for more documentation
+        about the reason this is overridden here.
+        """
+        self.south_executing = False
+        if django.VERSION < (1, 8):
+            if self.rel is None and hasattr(self, '_rel'):
+                self.rel = self._rel
+        return []
+
+    def get_internal_type(self):
+        """
+        Related to the implementation of db_type(), returns the pre-existing
+        Django Field class whose database column is the same as the current
+        field class, if such a class exists.
+
+        See GenericForeignFileField.south_init() for more documentation
+        about the reason this is overridden here.
+        """
+        if getattr(self, 'south_executing', None):
+            return 'FileField'
+        else:
+            # super() returns 'ManyToManyField'
+            return super(GenericForeignFileField, self).get_internal_type()
+
+    def db_type(self, connection):
+        """
+        Returns the database column data type for this field, for the provided
+        connection.
+
+        See GenericForeignFileField.south_init() for more documentation
+        about the reason this is overridden here.
+        """
+        if getattr(self, 'south_executing', None):
+            return models.Field.db_type(self, connection)
+        else:
+            # super() returns None
+            return super(GenericForeignFileField, self).db_type(connection)
 
     def save_form_data(self, instance, data):
         super(GenericForeignFileField, self).save_form_data(instance, data)
@@ -373,10 +527,24 @@ class GenericForeignFileDescriptor(object):
             'prefetch_cache_name': self.field.attname,
         }
 
-        join_cols = self.field.get_joining_columns(reverse_join=True)[0]
+        if hasattr(compat_rel(self.field), 'symmetrical'):
+            # Django <= 1.5
+            manager_kwargs['symmetrical'] = (compat_rel(self.field).symmetrical and instance.__class__ == rel_model)
+
+        if hasattr(self.field, 'get_joining_columns'):
+            join_cols = self.field.get_joining_columns(reverse_join=True)[0]
+        else:
+            join_cols = [self.field.m2m_column_name(), self.field.m2m_reverse_name()]
 
         ct_manager = ContentType.objects.db_manager(instance._state.db)
-        content_type = ct_manager.get_for_model(instance, for_concrete_model=self.for_concrete_model)
+        try:
+            content_type = ct_manager.get_for_model(instance, for_concrete_model=self.for_concrete_model)
+        except TypeError:
+            # Django <= 1.5
+            if not self.for_concrete_model:
+                raise
+            else:
+                content_type = ct_manager.get_for_model(instance)
 
         manager = RelatedManager(
             model=rel_model,
@@ -400,7 +568,10 @@ class GenericForeignFileDescriptor(object):
                 val = getattr(instance, cache_name)
             except AttributeError:
                 db = manager._db or router.db_for_read(rel_model, instance=instance)
-                qset = superclass.get_queryset(manager).using(db)
+                if django.VERSION > (1, 6):
+                    qset = superclass.get_queryset(manager).using(db)
+                else:
+                    qset = superclass.get_query_set(manager).using(db)
 
                 try:
                     val = qset.get(**manager.core_filters)
@@ -503,7 +674,6 @@ def create_generic_related_manager(superclass):
         def __init__(self, model=None, instance=None, symmetrical=None,
                      source_col_name=None, target_col_name=None, content_type=None,
                      content_type_field_name=None, object_id_field_name=None,
-                     prefetch_cache_name=None,
                      field_identifier_field_name=None, **kwargs):
             super(GenericRelatedObjectManager, self).__init__()
             self.model = model
@@ -519,7 +689,9 @@ def create_generic_related_manager(superclass):
             if field_identifier_field_name:
                 self.core_filters['%s__exact' % field_identifier_field_name] = getattr(self._field, field_identifier_field_name)
 
-            self.prefetch_cache_name = prefetch_cache_name
+            if 'prefetch_cache_name' in kwargs:
+                # django 1.4+
+                self.prefetch_cache_name = kwargs['prefetch_cache_name']
             self.source_col_name = source_col_name
             self.target_col_name = target_col_name
             self.content_type_field_name = content_type_field_name
@@ -527,16 +699,23 @@ def create_generic_related_manager(superclass):
             self.pk_val = self.instance._get_pk_val()
 
         def get_queryset(self):
-            try:
-                return self.instance._prefetched_objects_cache[self.prefetch_cache_name]
-            except (AttributeError, KeyError):
-                pass
+            if hasattr(self, 'prefetch_cache_name'):
+                try:
+                    return self.instance._prefetched_objects_cache[self.prefetch_cache_name]
+                except (AttributeError, KeyError):
+                    pass
             db = self._db or router.db_for_read(self.model, instance=self.instance)
             query = {
                 ('%s__pk' % self.content_type_field_name): self.content_type.id,
                 ('%s__exact' % self.object_id_field_name): self.pk_val,
             }
-            return superclass.get_queryset(self).using(db).filter(**query)
+            if django.VERSION < (1, 6):
+                return superclass.get_query_set(self).using(db).filter(**query)
+            else:
+                return superclass.get_queryset(self).using(db).filter(**query)
+
+        if django.VERSION < (1, 6):
+            get_query_set = get_queryset
 
         def get_prefetch_queryset(self, instances, queryset=None):
             db = self._db or router.db_for_read(self.model, instance=instances[0])
@@ -544,12 +723,18 @@ def create_generic_related_manager(superclass):
                 ('%s__pk' % self.content_type_field_name): self.content_type.id,
                 ('%s__in' % self.object_id_field_name): set(obj._get_pk_val() for obj in instances),
             }
-            qs = super(GenericRelatedObjectManager, self).get_queryset()
+            if django.VERSION < (1, 6):
+                qs = super(GenericRelatedObjectManager, self).get_query_set()
+            else:
+                qs = super(GenericRelatedObjectManager, self).get_queryset()
             return (qs.using(db).filter(**query),
                     operator.attrgetter(self.object_id_field_name),
                     lambda obj: obj._get_pk_val(),
                     False,
                     self.prefetch_cache_name)
+
+        if django.VERSION < (1, 7):
+            get_prefetch_query_set = get_prefetch_queryset
 
         def add(self, *objs):
             for obj in objs:
@@ -605,3 +790,23 @@ def create_generic_related_manager(superclass):
         create.alters_data = True
 
     return GenericRelatedObjectManager
+
+
+try:
+    from south.modelsinspector import add_introspection_rules
+except ImportError:
+    pass
+else:
+    add_introspection_rules(rules=[
+        (
+            (GenericForeignFileField,),
+            [],
+            {
+                "to": ["rel.to", {}],
+                "symmetrical": ["rel.symmetrical", {"default": True}],
+                "object_id_field": ["object_id_field_name", {"default": "object_id"}],
+                "content_type_field": ["content_type_field_name", {"default": "content_type"}],
+                "blank": ["blank", {"default": True}],
+            },
+        ),
+    ], patterns=["^generic_plus\.fields\.GenericForeignFileField"])

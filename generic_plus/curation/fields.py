@@ -1,12 +1,27 @@
 import django
-from django.apps import apps
-from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db import models
-from django.utils.deconstruct import deconstructible
 from django.utils.functional import cached_property
 from django.utils import six
 
 from .forms import ContentObjectChoiceField
+
+try:
+    from django.contrib.contenttypes.fields import GenericForeignKey
+except ImportError:
+    from django.contrib.contenttypes.generic import GenericForeignKey
+
+try:
+    from django.apps import apps
+except ImportError:
+    from django.db.models import get_model
+else:
+    get_model = apps.get_model
+
+try:
+    from django.utils.deconstruct import deconstructible
+except ImportError:
+    def deconstructible(f):
+        return f
 
 
 @deconstructible
@@ -19,7 +34,7 @@ class ContentTypeChoice(object):
 
     @cached_property
     def model(self):
-        return apps.get_model(self.to)
+        return get_model(self.to)
 
     def get_queryset(self):
         qset = self.model.objects.all()

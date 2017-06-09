@@ -1,3 +1,4 @@
+import django
 from django import forms
 from django.contrib.contenttypes.models import ContentType
 from django.forms import ValidationError
@@ -46,9 +47,12 @@ class ContentObjectChoiceField(forms.ModelChoiceField):
         super(ContentObjectChoiceField, self).__init__(*args, **kwargs)
 
     def prepare_value(self, value):
+        ctype_kwargs = {}
+        if django.VERSION > (1, 6):
+            ctype_kwargs['for_concrete_model'] = self.field.for_concrete_model
         if isinstance(value, models.Model):
             ctype = ContentType.objects.get_for_model(
-                type(value), for_concrete_model=self.field.for_concrete_model)
+                type(value), **ctype_kwargs)
             object_id = value.pk
             return "%s-%s" % (ctype.pk, object_id)
         else:

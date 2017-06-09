@@ -20,10 +20,12 @@ class ItemInline(admin.StackedInline):
     }
 
 
-@admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
 
     inlines = [ItemInline]
     fieldsets = (
         (None, {'fields': ('name',)}),
     )
+
+
+admin.site.register(Group, GroupAdmin)

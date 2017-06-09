@@ -64,7 +64,11 @@ def patch_model_form():
 
 def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=None):
     from generic_plus.fields import GenericForeignFileField
-    from django.contrib.admin.utils import flatten_fieldsets
+    try:
+        # Django 1.8+
+        from django.contrib.admin.utils import flatten_fieldsets
+    except ImportError:
+        from django.contrib.admin.util import flatten_fieldsets
 
     if not BaseModelAdmin:
         from django.contrib.admin.options import BaseModelAdmin
@@ -76,7 +80,11 @@ def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=Non
     def get_generic_fk_file_fields_for_model(model):
         """Returns a list of GenericForeignFileFields on a given model"""
         opts = model._meta
-        m2m_fields = [f for f in opts.get_fields() if f.many_to_many and not f.auto_created]
+        if hasattr(opts, 'get_fields'):
+            # Django 1.8+
+            m2m_fields = [f for f in opts.get_fields() if f.many_to_many and not f.auto_created]
+        else:
+            m2m_fields = opts.many_to_many
         if hasattr(opts, 'private_fields'):
             private_fields = opts.private_fields
         else:

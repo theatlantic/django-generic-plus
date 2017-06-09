@@ -1,7 +1,22 @@
 from django import forms
-from django.forms.utils import flatatt
-from django.utils.encoding import force_text
-from django.utils.html import format_html
+
+try:
+    from django.utils.html import format_html
+except ImportError:
+    from django.utils.html import escape, conditional_escape
+
+    def format_html(s, val, attrs, label):
+        return s.format(escape(val), attrs, conditional_escape(label))
+
+try:
+    from django.utils.encoding import force_text
+except ImportError:
+    from django.utils.encoding import force_unicode as force_text
+
+try:
+    from django.forms.utils import flatatt
+except ImportError:
+    from django.forms.util import flatatt
 
 
 class ContentObjectSelect(forms.Select):
@@ -26,5 +41,5 @@ class ContentObjectSelect(forms.Select):
         for the purposes of adding client-side enhancements to the admin.
         """
         attrs = attrs or {}
-        return format_html('<option value="{}"{}>{}</option>',
+        return format_html(u'<option value="{}"{}>{}</option>',
             option_value, flatatt(attrs), option_label)

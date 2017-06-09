@@ -5,7 +5,11 @@ dj19 = bool(django.VERSION >= (1, 9))
 
 
 def compat_rel(f):
-    return getattr(f, 'remote_field' if dj19 else 'rel')
+    if django.VERSION > (1, 9):
+        rel_attr = 'remote_field'
+    else:
+        rel_attr = 'rel'
+    return getattr(f, rel_attr, None)
 
 
 def compat_rel_to(f):

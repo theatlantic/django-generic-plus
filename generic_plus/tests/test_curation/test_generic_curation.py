@@ -1,5 +1,8 @@
-from django.test import TestCase, override_settings
-from django.contrib.auth import get_user_model
+from unittest import SkipTest
+
+import django
+from django.test import TestCase, RequestFactory
+from django.test.utils import override_settings
 from django.contrib.contenttypes.models import ContentType
 
 try:
@@ -12,10 +15,24 @@ from ..settings import INSTALLED_APPS
 
 import lxml.html
 
+try:
+    from django.contrib.auth import get_user_model
+except ImportError:
+    from django.contrib.auth.models import User
+
+    def get_user_model():
+        return User
+
 
 class TestModels(TestCase):
 
     available_apps = [a for a in INSTALLED_APPS]
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestModels, cls).setUpClass()
+        if django.VERSION < (1, 8):
+            raise SkipTest("Not supported in django < 1.8")
 
     def test_create(self):
         foo = Foo.objects.create(name="a1")
@@ -36,6 +53,12 @@ class TestAdmin(TestCase):
 
     available_apps = [a for a in INSTALLED_APPS]
     maxDiff = None
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestAdmin, cls).setUpClass()
+        if django.VERSION < (1, 8):
+            raise SkipTest("Not supported in django < 1.8")
 
     def setUp(self):
         super(TestAdmin, self).setUp()
