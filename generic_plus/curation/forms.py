@@ -2,7 +2,6 @@ from django import forms
 from django.contrib.contenttypes.models import ContentType
 from django.forms import ValidationError
 from django.db import models
-from django.db.models.query import EmptyQuerySet
 from django.forms.models import ModelChoiceIterator
 from django.utils.encoding import smart_text
 
@@ -43,7 +42,7 @@ class ContentObjectChoiceField(forms.ModelChoiceField):
         self.ct_choices = kwargs.pop('ct_choices')
         self.field = kwargs.pop('db_field')
         # queryset has to be here, but it doesn't have any effect
-        kwargs['queryset'] = EmptyQuerySet
+        kwargs['queryset'] = self.field.model._default_manager.none()
         super(ContentObjectChoiceField, self).__init__(*args, **kwargs)
 
     def prepare_value(self, value):

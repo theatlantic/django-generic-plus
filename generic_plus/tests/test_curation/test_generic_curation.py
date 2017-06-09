@@ -1,7 +1,11 @@
 from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.core.urlresolvers import reverse
+
+try:
+    from django.urls import reverse
+except ImportError:
+    from django.core.urlresolvers import reverse
 
 from .models import Foo, Bar, BazProxy, Item, Group
 from ..settings import INSTALLED_APPS

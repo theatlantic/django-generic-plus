@@ -1,3 +1,4 @@
+import django
 from django.conf.urls import include, url
 from django.contrib import admin
 
@@ -5,11 +6,7 @@ from django.contrib import admin
 import generic_plus.tests.test_filefield.admin  # noqa
 
 
-urlpatterns = [url(r'^admin/', include(admin.site.urls))]
-
-try:
-    import grappelli  # noqa
-except ImportError:
-    pass
+if django.VERSION > (1, 9):
+    urlpatterns = [url(r'^admin/', admin.site.urls)]
 else:
-    urlpatterns += [url(r"^grappelli/", include("grappelli.urls"))]
+    urlpatterns = [url(r'^admin/', include(admin.site.urls))]

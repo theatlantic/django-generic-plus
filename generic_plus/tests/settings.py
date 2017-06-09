@@ -2,6 +2,14 @@
 import os
 import tempfile
 
+import django
+
+
+try:
+    import dj_database_url
+except ImportError:
+    dj_database_url = None
+
 
 current_dir = os.path.abspath(os.path.dirname(__file__))
 temp_dir = tempfile.mkdtemp()
@@ -13,6 +21,11 @@ DATABASES = {
         'NAME': ':memory:'
     }
 }
+
+if dj_database_url is not None:
+    DATABASES['default'] = dj_database_url.parse(
+        os.environ.get('DATABASE_URL', 'sqlite://:memory:'))
+
 SECRET_KEY = 'z-i*xqqn)r0i7leak^#clq6y5j8&tfslp^a4duaywj2$**s*0_'
 
 TEMPLATES = [{
@@ -33,14 +46,7 @@ TEMPLATES = [{
     },
 }]
 
-try:
-    import grappelli  # noqa
-except ImportError:
-    INSTALLED_APPS = tuple([])
-else:
-    INSTALLED_APPS = tuple(['grappelli'])
-
-INSTALLED_APPS += (
+INSTALLED_APPS = (
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.messages',
@@ -50,12 +56,40 @@ INSTALLED_APPS += (
     'django.contrib.admin',
     'generic_plus',
 )
-MIDDLEWARE_CLASSES = (
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.contrib.auth.middleware.SessionAuthenticationMiddleware',
-)
+
+if django.VERSION >= (1, 10):
+    MIDDLEWARE = [
+        'django.middleware.security.SecurityMiddleware',
+        'django.contrib.sessions.middleware.SessionMiddleware',
+        'django.middleware.common.CommonMiddleware',
+        'django.middleware.csrf.CsrfViewMiddleware',
+        'django.contrib.auth.middleware.AuthenticationMiddleware',
+        'django.contrib.messages.middleware.MessageMiddleware',
+        'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    ]
+else:
+    MIDDLEWARE_CLASSES = (
+        'django.contrib.sessions.middleware.SessionMiddleware',
+        'django.contrib.auth.middleware.AuthenticationMiddleware',
+        'django.contrib.messages.middleware.MessageMiddleware',
+        'django.contrib.auth.middleware.SessionAuthenticationMiddleware',
+    )
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'generic_plus': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+        },
+    },
+}
 
 SITE_ID = 1
 MEDIA_ROOT = os.path.join(temp_dir, 'media')

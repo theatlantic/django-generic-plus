@@ -33,7 +33,7 @@ class TestFileModel(models.Model):
 
     related = models.ForeignKey(TestRelated, null=True, blank=True,
         on_delete=models.CASCADE)
-    m2m = models.ManyToManyField(TestM2M, null=True, blank=True)
+    m2m = models.ManyToManyField(TestM2M, blank=True)
 
     class Meta:
         app_label = "generic_plus"
