@@ -28,6 +28,13 @@ if dj_database_url is not None:
 
 SECRET_KEY = 'z-i*xqqn)r0i7leak^#clq6y5j8&tfslp^a4duaywj2$**s*0_'
 
+if django.VERSION > (2, 0):
+    MIGRATION_MODULES = {
+        'auth': None,
+        'contenttypes': None,
+        'sessions': None,
+    }
+
 TEMPLATES = [{
     'BACKEND': 'django.template.backends.django.DjangoTemplates',
     'DIRS': [os.path.join(current_dir, 'test_filefield', 'templates')],
