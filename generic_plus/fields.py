@@ -141,6 +141,7 @@ class GenericForeignFileField(GenericRelation):
                                 related_name=kwargs.pop('related_name', None),
                                 limit_choices_to=kwargs.pop('limit_choices_to', None),
                                 symmetrical=symmetrical)
+            kwargs['rel'].field = self
 
         # Override content-type/object-id field names on the related class
         self.object_id_field_name = kwargs.pop("object_id_field", "object_id")
@@ -170,7 +171,7 @@ class GenericForeignFileField(GenericRelation):
 
         self.file_kwargs['db_column'] = kwargs.get('db_column', self.name)
 
-    if django.VERSION[:2] in ((1, 6), (1, 7)):
+    if (1, 6) < django.VERSION < (1, 8):
         # Prior to Django 1.6, Model._meta.get_field_by_name() never returned
         # virtual fields. django-generic-plus takes advantage of this fact in
         # order to have _both_ a virtual field (the generic relation) and a
@@ -416,7 +417,13 @@ class GenericForeignFileField(GenericRelation):
             instance.save()
 
     def formfield(self, **kwargs):
-        factory_kwargs = {'related': compat_rel(self)}
+        factory_kwargs = {}
+        if django.VERSION > (1, 9):
+            factory_kwargs['related'] = getattr(self, 'remote_field', None)
+        elif django.VERSION > (1, 8):
+            factory_kwargs['related'] = getattr(self, 'rel', None)
+        else:
+            factory_kwargs['related'] = getattr(self, 'related', None)
         widget = kwargs.pop('widget', None) or generic_fk_file_widget_factory(**factory_kwargs)
         formfield = kwargs.pop('form_class', None) or generic_fk_file_formfield_factory(widget=widget, **factory_kwargs)
         widget.parent_admin = formfield.parent_admin = kwargs.pop('parent_admin', None)
@@ -674,6 +681,7 @@ def create_generic_related_manager(superclass):
         def __init__(self, model=None, instance=None, symmetrical=None,
                      source_col_name=None, target_col_name=None, content_type=None,
                      content_type_field_name=None, object_id_field_name=None,
+                     prefetch_cache_name=None,
                      field_identifier_field_name=None, **kwargs):
             super(GenericRelatedObjectManager, self).__init__()
             self.model = model
@@ -689,9 +697,7 @@ def create_generic_related_manager(superclass):
             if field_identifier_field_name:
                 self.core_filters['%s__exact' % field_identifier_field_name] = getattr(self._field, field_identifier_field_name)
 
-            if 'prefetch_cache_name' in kwargs:
-                # django 1.4+
-                self.prefetch_cache_name = kwargs['prefetch_cache_name']
+            self.prefetch_cache_name = prefetch_cache_name
             self.source_col_name = source_col_name
             self.target_col_name = target_col_name
             self.content_type_field_name = content_type_field_name
@@ -699,11 +705,10 @@ def create_generic_related_manager(superclass):
             self.pk_val = self.instance._get_pk_val()
 
         def get_queryset(self):
-            if hasattr(self, 'prefetch_cache_name'):
-                try:
-                    return self.instance._prefetched_objects_cache[self.prefetch_cache_name]
-                except (AttributeError, KeyError):
-                    pass
+            try:
+                return self.instance._prefetched_objects_cache[self.prefetch_cache_name]
+            except (AttributeError, KeyError):
+                pass
             db = self._db or router.db_for_read(self.model, instance=self.instance)
             query = {
                 ('%s__pk' % self.content_type_field_name): self.content_type.id,
