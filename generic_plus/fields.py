@@ -149,7 +149,7 @@ class GenericForeignFileField(GenericRelation):
             if not self.file_kwargs['height_field']:
                 del self.file_kwargs['height_field']
 
-        self.__dict__['file_field'] = self.file_field_cls(**self.file_kwargs)
+        self.__dict__['file_field'] = self.file_field_cls(name=name, **self.file_kwargs)
         ### HACK: manually fix creation counter
         self.file_field.creation_counter = self.creation_counter
 
