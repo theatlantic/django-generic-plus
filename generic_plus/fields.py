@@ -123,6 +123,21 @@ class GenericForeignFileField(GenericRelation):
 
         self.file_kwargs['db_column'] = kwargs.get('db_column', self.name)
 
+    def get_cached_value(self, instance, **kwargs):
+        cache_name = self.get_cache_name()
+        if django.VERSION > (2, 0):
+            return super(GenericForeignFileField, self).get_cached_value(
+                instance, **kwargs)
+        else:
+            return instance.__dict__[cache_name]
+
+    def set_cached_value(self, instance, value):
+        cache_name = self.get_cache_name()
+        if django.VERSION > (2, 0):
+            super(GenericForeignFileField, self).set_cached_value(instance, value)
+        else:
+            instance.__dict__[cache_name] = value
+
     def contribute_to_class(self, cls, name):
         self.generic_rel_name = '%s_generic_rel' % name
         self.raw_file_field_name = '%s_raw' % name
@@ -187,7 +202,10 @@ class GenericForeignFileField(GenericRelation):
         setattr(cls, self.raw_file_field_name, self.file_descriptor_cls(self.file_field))
 
     def is_cached(self, instance):
-        return hasattr(instance, self.get_cache_name())
+        if django.VERSION > (2, 0):
+            return super(GenericForeignFileField, self).is_cached(instance)
+        else:
+            return hasattr(instance, self.get_cache_name())
 
     def get_prefetch_queryset(self, instances, queryset=None):
         models = set([type(i) for i in instances])
@@ -216,13 +234,13 @@ class GenericForeignFileField(GenericRelation):
                 rel_obj_attr,
                 get_ctype_obj_id,
                 True,
-                self.attname)
+                self.attname) + (() if django.VERSION < (2, 0) else (True,))
 
         return (self.bulk_related_objects(instances),
             operator.attrgetter(self.object_id_field_name),
             lambda obj: obj._get_pk_val(),
             True,
-            self.attname)
+            self.attname) + (() if django.VERSION < (2, 0) else (True,))
 
     def bulk_related_objects(self, *args, **kwargs):
         """
@@ -355,7 +373,6 @@ class GenericForeignFileDescriptor(object):
         if instance is None:
             return self.field
 
-        cache_name = self.field.get_cache_name()
         file_val = None
 
         if self.is_file_field:
@@ -397,8 +414,8 @@ class GenericForeignFileDescriptor(object):
                 return manager
 
             try:
-                val = getattr(instance, cache_name)
-            except AttributeError:
+                val = self.field.get_cached_value(instance)
+            except KeyError:
                 db = manager._db or router.db_for_read(rel_model, instance=instance)
                 qset = superclass.get_queryset(manager).using(db)
 
@@ -408,7 +425,7 @@ class GenericForeignFileDescriptor(object):
                     val = None
 
             self.set_file_value(instance, file_val, obj=val)
-            setattr(instance, self.field.get_cache_name(), val)
+            self.field.set_cached_value(instance, val)
         return instance.__dict__[self.file_field.name]
 
     def set_file_value(self, instance, value, obj=None):
@@ -469,7 +486,7 @@ class GenericForeignFileDescriptor(object):
             raise AttributeError("Manager must be accessed via instance")
 
         if isinstance(value, compat_rel_to(self.field)) or value is None:
-            setattr(instance, self.field.get_cache_name(), value)
+            self.field.set_cached_value(instance, value)
 
         if self.is_file_field:
             self.set_file_value(instance, value)
@@ -489,7 +506,7 @@ class GenericForeignFileDescriptor(object):
                     file_val = field_value.path if field_value else None
                     setattr(instance, self.field.file_field_name, file_val)
                     manager.add(obj)
-                    setattr(instance, self.field.get_cache_name(), value)
+                self.field.set_cached_value(instance, value)
 
 
 def create_generic_related_manager(superclass):
@@ -549,7 +566,7 @@ def create_generic_related_manager(superclass):
                     operator.attrgetter(self.object_id_field_name),
                     lambda obj: obj._get_pk_val(),
                     False,
-                    self.prefetch_cache_name)
+                    self.prefetch_cache_name) + (() if django.VERSION < (2, 0) else (False,))
 
         def add(self, *objs):
             for obj in objs:
