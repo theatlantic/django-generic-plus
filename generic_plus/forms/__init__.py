@@ -324,7 +324,9 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
                     # a form that was deleted, which causes the pk clean to
                     # fail (because the instance has been deleted). To get
                     # around this we clear the pk and save it as if it were new.
+                    form.data._mutable = True
                     form.data[form.add_prefix(pk_name)] = ''
+                    form.data._mutable = False
                     saved_instances.extend(self.save_new_objects([form], commit))
                     continue
                 pk_value = getattr(pk_value, 'pk', pk_value)
