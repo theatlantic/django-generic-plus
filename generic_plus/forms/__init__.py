@@ -94,6 +94,9 @@ class GenericForeignFileFormField(forms.Field):
         kwargs['widget'] = widget
         super(GenericForeignFileFormField, self).__init__(*args, **kwargs)
 
+    def get_bound_field(self, form, field_name):
+        return GenericForeignFileBoundField(form, self, field_name)
+
     def to_python(self, value):
         value = super(GenericForeignFileFormField, self).to_python(value)
         if value in validators.EMPTY_VALUES:

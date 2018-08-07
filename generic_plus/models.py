@@ -10,23 +10,24 @@ def patch_django():
 
 
 def patch_model_form():
-    from django.forms import BaseForm
+    from django.forms import BaseForm, Field
     from django.forms.forms import BoundField
     from generic_plus.forms import GenericForeignFileFormField, GenericForeignFileBoundField
 
-    @monkeybiz.patch(BaseForm)
-    def __getitem__(old_func, self, name):
-        """
-        Returns a GenericForeignFileBoundField instead of BoundField for GenericForeignFileFormFields
-        """
-        try:
-            field = self.fields[name]
-        except KeyError:
-            raise KeyError('Key %r not found in Form' % name)
-        if isinstance(field, GenericForeignFileFormField):
-            return GenericForeignFileBoundField(self, field, name)
-        else:
-            return BoundField(self, field, name)
+    if not hasattr(Field, 'get_bound_field'):
+        @monkeybiz.patch(BaseForm)
+        def __getitem__(old_func, self, name):
+            """
+            Returns a GenericForeignFileBoundField instead of BoundField for GenericForeignFileFormFields
+            """
+            try:
+                field = self.fields[name]
+            except KeyError:
+                raise KeyError('Key %r not found in Form' % name)
+            if isinstance(field, GenericForeignFileFormField):
+                return GenericForeignFileBoundField(self, field, name)
+            else:
+                return BoundField(self, field, name)
 
     # Patch to form_utils, if installed
     try:
