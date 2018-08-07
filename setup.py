@@ -10,7 +10,7 @@ except ImportError:
 
 setup(
     name='django-generic-plus',
-    version="2.2.1",
+    version="2.2.2",
     install_requires=[
         'python-monkey-business>=1.0.0',
     ],
