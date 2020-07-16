@@ -1,10 +1,10 @@
+import six
 import django
 from django.apps import apps
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db import models
 from django.utils.deconstruct import deconstructible
 from django.utils.functional import cached_property
-from django.utils import six
 
 from .forms import ContentObjectChoiceField
 

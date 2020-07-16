@@ -1,6 +1,6 @@
 import types
 
-from django.utils.six.moves import filter
+from six.moves import filter
 import monkeybiz
 
 
