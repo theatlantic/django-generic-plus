@@ -5,6 +5,9 @@ django.contrib.contenttypes.
 import itertools
 import operator
 
+import six
+from six.moves import reduce
+
 import django
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
@@ -12,9 +15,6 @@ from django.core.files.base import File
 from django.core.files.uploadedfile import UploadedFile
 from django.db import connection, router, models
 from django.db.models.fields.files import FieldFile, FileDescriptor
-from django.utils.functional import curry
-from django.utils import six
-from django.utils.six.moves import reduce
 
 from django.contrib.contenttypes.admin import GenericInlineModelAdmin
 from django.contrib.contenttypes.fields import GenericRelation, GenericRel
@@ -22,6 +22,19 @@ from django.contrib.contenttypes.fields import GenericRelation, GenericRel
 from generic_plus.compat import compat_rel, compat_rel_to
 from generic_plus.forms import (
     generic_fk_file_formfield_factory, generic_fk_file_widget_factory)
+
+try:
+    from django.utils.functional import curry
+except ImportError:
+    # You can't trivially replace this with `functools.partial` because this binds
+    # to classes and returns bound instances, whereas functools.partial (on
+    # CPython) is a type and its instances don't bind.
+    def curry(_curried_func, *args, **kwargs):
+        def _curried(*moreargs, **morekwargs):
+            merged = dict(**kwargs)
+            merged.update(morekwargs)
+            return _curried_func(*(args + moreargs), **merged)
+        return _curried
 
 
 class GenericForeignFileField(GenericRelation):

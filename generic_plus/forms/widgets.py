@@ -1,5 +1,6 @@
 import re
 
+import six
 import django
 from django.core.exceptions import ObjectDoesNotExist
 from django.forms.widgets import Input
@@ -8,7 +9,6 @@ from django.contrib.admin import helpers
 from django.contrib.admin.sites import site
 from django.db.models.fields.files import FieldFile
 from django.template.loader import render_to_string
-from django.utils import six
 
 from generic_plus.compat import compat_rel_to
 

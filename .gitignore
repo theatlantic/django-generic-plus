@@ -11,3 +11,4 @@ pip-log.txt
 /docs/_build
 /out
 .tox/
+.python-version

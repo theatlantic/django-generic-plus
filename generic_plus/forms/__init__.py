@@ -1,3 +1,6 @@
+import six
+from six.moves import range
+
 import django
 from django import forms
 from django.contrib.admin.widgets import AdminFileWidget
@@ -11,8 +14,6 @@ from django.forms.forms import BoundField
 from django.forms.formsets import TOTAL_FORM_COUNT, DEFAULT_MAX_NUM
 from django.forms.models import modelform_factory, ModelFormMetaclass
 from django.utils.encoding import force_text
-from django.utils import six
-from django.utils.six.moves import range
 from django.utils.translation import ungettext
 
 from .widgets import generic_fk_file_widget_factory, GenericForeignFileWidget
