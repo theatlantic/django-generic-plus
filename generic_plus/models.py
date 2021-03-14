@@ -11,7 +11,7 @@ def patch_django():
 
 def patch_model_form():
     from django.forms import BaseForm, Field
-    from django.forms.forms import BoundField
+    from django.forms.boundfield import BoundField
     from generic_plus.forms import GenericForeignFileFormField, GenericForeignFileBoundField
 
     if not hasattr(Field, 'get_bound_field'):
