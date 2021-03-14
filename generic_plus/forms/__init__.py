@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
 from django.db import models
 from django.db.models.fields.files import FieldFile
-from django.forms.forms import BoundField
+from django.forms.boundfield import BoundField
 from django.forms.formsets import TOTAL_FORM_COUNT, DEFAULT_MAX_NUM
 from django.forms.models import modelform_factory, ModelFormMetaclass
 from django.utils.encoding import force_text

@@ -3,7 +3,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.forms import ValidationError
 from django.db import models
 from django.forms.models import ModelChoiceIterator
-from django.utils.encoding import smart_text
+from django.utils.encoding import smart_str
 
 from .widgets import ContentObjectSelect
 
@@ -26,7 +26,7 @@ class ContentObjectChoiceIterator(ModelChoiceIterator):
             "empty_label": None,
             "queryset": choice.get_queryset(),
             "prepare_value": self.field.prepare_value,
-            "label_from_instance": staticmethod(smart_text),
+            "label_from_instance": staticmethod(smart_str),
             "cache_choices": False,
         })
         sub_choices = list(ModelChoiceIterator(fake_field))
