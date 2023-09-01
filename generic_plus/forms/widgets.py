@@ -1,6 +1,5 @@
 import re
 
-import six
 import django
 from django.core.exceptions import ObjectDoesNotExist
 from django.forms.widgets import Input
@@ -49,7 +48,7 @@ class GenericForeignFileWidget(Input):
             if file_value.startswith('/') and getattr(obj, self.field.name):
                 file_value = getattr(obj, self.field.name).name
             value = getattr(obj, 'pk', None)
-        elif rel_model and isinstance(value, six.string_types) and not value.isdigit():
+        elif rel_model and isinstance(value, str) and not value.isdigit():
             file_value = value
             if bound_field and getattr(bound_field, 'form', None):
                 if not bound_field.form.prefix or name.startswith(bound_field.form.prefix):
@@ -63,7 +62,7 @@ class GenericForeignFileWidget(Input):
                     pk_name = 'id'
                 value = bound_field.form.data.get("%s-0-%s" % (
                     formset_prefix, pk_name))
-        if rel_model and isinstance(value, six.integer_types) or (isinstance(value, six.string_types) and value.isdigit()):
+        if rel_model and isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
             if not obj or not file_value:
                 try:
                     obj = rel_model.objects.get(pk=value)

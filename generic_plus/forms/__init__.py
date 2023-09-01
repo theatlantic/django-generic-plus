@@ -1,6 +1,3 @@
-import six
-from six.moves import range
-
 import django
 from django import forms
 from django.contrib.admin.widgets import AdminFileWidget
@@ -13,8 +10,8 @@ from django.db.models.fields.files import FieldFile
 from django.forms.boundfield import BoundField
 from django.forms.formsets import TOTAL_FORM_COUNT, DEFAULT_MAX_NUM
 from django.forms.models import modelform_factory, ModelFormMetaclass
-from django.utils.encoding import force_text
-from django.utils.translation import ungettext
+from django.utils.encoding import force_str
+from django.utils.translation import ngettext
 
 from .widgets import generic_fk_file_widget_factory, GenericForeignFileWidget
 
@@ -29,7 +26,7 @@ class GenericForeignFileBoundField(BoundField):
         self.db_file_field = getattr(db_field, 'file_field', None)
         value = self.value()
         use_file_field = False
-        if form.is_bound and isinstance(value, six.string_types) and not value.isdigit():
+        if form.is_bound and isinstance(value, str) and not value.isdigit():
             formset_total_count_name = '%s-%s' % (form.add_prefix(name), forms.formsets.TOTAL_FORM_COUNT)
             if formset_total_count_name not in form.data:
                 use_file_field = True
@@ -62,7 +59,7 @@ class GenericForeignFileBoundField(BoundField):
         val = super(GenericForeignFileBoundField, self).value()
         if not self.db_file_field or not getattr(self.form, 'instance', None):
             return val
-        if isinstance(self.field, forms.FileField) and isinstance(val, six.string_types):
+        if isinstance(self.field, forms.FileField) and isinstance(val, str):
             val = self.db_file_field.attr_class(self.form.instance, self.db_file_field, val)
         return val
 
@@ -108,11 +105,11 @@ class GenericForeignFileFormField(forms.Field):
         if isinstance(value, UploadedFile):
             return value
 
-        if isinstance(value, six.string_types) and not value.isdigit():
+        if isinstance(value, str) and not value.isdigit():
             return value
 
         try:
-            value = int(six.text_type(value))
+            value = int(str(value))
         except (ValueError, TypeError):
             raise ValidationError(self.error_messages['invalid'])
         return value
@@ -341,7 +338,7 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
                 try:
                     obj = model_cls.objects.get(pk=pk_value)
                 except model_cls.DoesNotExist:
-                    if pk_value and force_text(form.instance.pk) == force_text(pk_value):
+                    if pk_value and force_str(form.instance.pk) == force_str(pk_value):
                         obj = form.instance
             if obj is None:
                 obj = self._existing_object(pk_value)
@@ -413,7 +410,7 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
             if (self.validate_max and
                 self.total_form_count() - len(self.deleted_forms) > self.max_num) or \
                 self.management_form.cleaned_data[TOTAL_FORM_COUNT] > self.absolute_max:
-                raise ValidationError(ungettext(
+                raise ValidationError(ngettext(
                     "Please submit %d or fewer forms.",
                     "Please submit %d or fewer forms.", self.max_num) % self.max_num,
                     code='too_many_forms',
@@ -422,7 +419,7 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
             self.clean()
         except ValidationError as e:
             if getattr(e, 'code', None) != 'missing_management_form':
-                if e.messages != [u'ManagementForm data is missing or has been tampered with']:
+                if e.messages != ['ManagementForm data is missing or has been tampered with']:
                     self._non_form_errors = self.error_class(e.messages)
 
 

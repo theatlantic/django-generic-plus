@@ -1,6 +1,5 @@
 import types
 
-from six.moves import filter
 import monkeybiz
 
 
