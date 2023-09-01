@@ -2,11 +2,9 @@
 Defines GenericForeignFileField, a subclass of GenericRelation from
 django.contrib.contenttypes.
 """
+from functools import reduce
 import itertools
 import operator
-
-import six
-from six.moves import reduce
 
 import django
 from django.contrib.contenttypes.models import ContentType
@@ -472,7 +470,7 @@ class GenericForeignFileDescriptor(object):
             obj = value
             value = getattr(obj, self.field.rel_file_field_name)
 
-        if isinstance(value, six.string_types) or value is None:
+        if isinstance(value, str) or value is None:
             attr = attr_cls(instance, self.file_field, value)
             attr.related_object = obj
             instance.__dict__[self.file_field.name] = attr

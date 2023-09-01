@@ -1,4 +1,3 @@
-import six
 import django
 from django.apps import apps
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -25,7 +24,7 @@ class ContentTypeChoice(object):
         qset = self.model.objects.all()
         if self.limit_choices_to:
             limit_choices_to = self.limit_choices_to
-            if six.callable(self.limit_choices_to):
+            if callable(self.limit_choices_to):
                 limit_choices_to = limit_choices_to()
             if isinstance(limit_choices_to, models.QuerySet):
                 return limit_choices_to

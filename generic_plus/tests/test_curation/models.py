@@ -1,11 +1,9 @@
-import six
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 
 from generic_plus.curation.fields import ContentTypeChoice, GenericChoiceForeignKey
 
 
-@six.python_2_unicode_compatible
 class RelatedAbstract(models.Model):
     name = models.CharField(max_length=255)
 
@@ -36,7 +34,6 @@ class Baz(RelatedAbstract):
         app_label = "generic_plus"
 
 
-@six.python_2_unicode_compatible
 class BazProxy(Baz):
 
     class Meta:

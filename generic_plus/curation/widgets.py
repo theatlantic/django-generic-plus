@@ -1,6 +1,6 @@
 from django import forms
 from django.forms.utils import flatatt
-from django.utils.encoding import force_text
+from django.utils.encoding import force_str
 from django.utils.html import format_html
 
 
@@ -9,7 +9,7 @@ class ContentObjectSelect(forms.Select):
     def render_option(self, selected_choices, option_value, option_label):
         if option_value is None:
             option_value = ''
-        option_value = force_text(option_value)
+        option_value = force_str(option_value)
         attrs = {}
         if option_value in selected_choices:
             attrs['selected'] = 'selected'

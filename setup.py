@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='django-generic-plus',
-    version="2.4.0",
+    version="3.0.0",
     install_requires=[
         'python-monkey-business>=1.0.0',
     ],
@@ -17,6 +17,7 @@ setup(
     author_email='programmers@theatlantic.com',
     url='https://github.com/theatlantic/django-generic-plus',
     packages=find_packages(),
+    python_requires='>=3',
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Environment :: Web Environment',
@@ -24,17 +25,16 @@ setup(
         'Natural Language :: English',
         'Operating System :: OS Independent',
         'Framework :: Django',
-        'Framework :: Django :: 1.11',
-        'Framework :: Django :: 2.2',
-        'Framework :: Django :: 3.0',
-        'Framework :: Django :: 3.1',
         'Framework :: Django :: 3.2',
+        'Framework :: Django :: 4.0',
+        'Framework :: Django :: 4.1',
         'Programming Language :: Python',
-        "Programming Language :: Python :: 2",
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3 :: Only',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
     ],
     include_package_data=True,
     zip_safe=False)

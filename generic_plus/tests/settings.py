@@ -2,8 +2,6 @@
 import os
 import tempfile
 
-import django
-
 
 try:
     import dj_database_url
@@ -28,12 +26,11 @@ if dj_database_url is not None:
 
 SECRET_KEY = 'z-i*xqqn)r0i7leak^#clq6y5j8&tfslp^a4duaywj2$**s*0_'
 
-if django.VERSION > (2, 0):
-    MIGRATION_MODULES = {
-        'auth': None,
-        'contenttypes': None,
-        'sessions': None,
-    }
+MIGRATION_MODULES = {
+    'auth': None,
+    'contenttypes': None,
+    'sessions': None,
+}
 
 TEMPLATES = [{
     'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -96,3 +93,5 @@ MEDIA_URL = '/media/'
 STATIC_URL = '/static/'
 DEBUG_PROPAGATE_EXCEPTIONS = True
 TEST_RUNNER = 'django.test.runner.DiscoverRunner'
+DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
+USE_TZ = True
