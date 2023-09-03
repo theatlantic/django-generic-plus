@@ -12,6 +12,10 @@ from django.forms.formsets import TOTAL_FORM_COUNT, DEFAULT_MAX_NUM
 from django.forms.models import modelform_factory, ModelFormMetaclass
 from django.utils.encoding import force_str
 from django.utils.translation import ngettext
+try:
+    from django.forms.renderers import get_default_renderer
+except ImportError:
+    get_default_renderer = None
 
 from .widgets import generic_fk_file_widget_factory, GenericForeignFileWidget
 
@@ -423,13 +427,21 @@ class BaseGenericFileInlineFormSet(BaseGenericInlineFormSet):
                     self._non_form_errors = self.error_class(e.messages)
 
 
-def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFormSet,
-        form_attrs=None, formset_attrs=None, formfield_callback=None, prefix=None,
-        for_concrete_model=True):
-    if django.VERSION < (1, 9):
-        model = field.rel.to
-    else:
-        model = field.remote_field.model
+def generic_fk_file_formset_factory(
+    field=None,
+    formset=BaseGenericFileInlineFormSet,
+    form_attrs=None,
+    formset_attrs=None,
+    formfield_callback=None,
+    prefix=None,
+    for_concrete_model=True,
+    min_num=None,
+    validate_min=False,
+    absolute_max=None,
+    can_delete_extra=True,
+    renderer=None,
+):
+    model = field.remote_field.model
     ct_field = model._meta.get_field(field.content_type_field_name)
     ct_fk_field = model._meta.get_field(field.object_id_field_name)
     exclude = [ct_field.name, ct_fk_field.name]
@@ -483,7 +495,13 @@ def generic_fk_file_formset_factory(field=None, formset=BaseGenericFileInlineFor
         'absolute_max': max(DEFAULT_MAX_NUM, (formset_attrs or {}).get('max_num') or 0),
         'for_concrete_model': for_concrete_model,
         'validate_max': False,
+        # 'min_num': min_num if min_num is not None else 0,
+        'validate_min': validate_min,
+        'can_delete_extra': can_delete_extra,
     }
+    if get_default_renderer is not None:
+        inline_formset_attrs["renderer"] = renderer or get_default_renderer()
+
     if field.field_identifier_field_name:
         field_identifier = getattr(field, field.field_identifier_field_name)
         inline_formset_attrs[field.field_identifier_field_name] = field_identifier
