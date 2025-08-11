@@ -56,7 +56,13 @@ class GenericChoiceForeignKey(GenericForeignKey, models.Field):
 
     @property
     def attname(self):
-        return self.name
+        if not hasattr(self, "_attname"):
+            self._attname = self.name
+        return self._attname
+
+    @attname.setter
+    def attname(self, value):
+        self._attname = value
 
     def formfield(self, **kwargs):
         defaults = {
