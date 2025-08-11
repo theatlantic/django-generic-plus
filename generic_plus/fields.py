@@ -66,6 +66,9 @@ class GenericForeignFileField(GenericRelation):
     generic_descriptor = None
     file_descriptor = None
 
+    empty_strings_allowed = True
+    rel_class = GenericRel
+
     file_descriptor_cls = FileDescriptor
     file_field_cls = models.FileField
     rel_file_field_name = 'file'
@@ -133,6 +136,9 @@ class GenericForeignFileField(GenericRelation):
             from_fields=[self.object_id_field_name], to_fields=[], **kwargs)
 
         self.file_kwargs['db_column'] = kwargs.get('db_column', self.name)
+
+    def get_cache_name(self):
+        return self.name
 
     def get_cached_value(self, instance, **kwargs):
         cache_name = self.get_cache_name()
@@ -219,6 +225,16 @@ class GenericForeignFileField(GenericRelation):
             return hasattr(instance, self.get_cache_name())
 
     def get_prefetch_queryset(self, instances, queryset=None):
+        if queryset is None:
+            return self.get_prefetch_querysets(instances)
+        return self.get_prefetch_querysets(instances, [queryset])
+
+    def get_prefetch_querysets(self, instances, querysets=None):
+        if querysets is not None:
+            raise Exception(
+                "Passing querysets in generic_plus get_prefetch_querysets is "
+                "not yet supported"
+            )
         models = set([type(i) for i in instances])
 
         # Handle case where instances are different models (and consequently,
@@ -401,7 +417,15 @@ class GenericForeignFileDescriptor(object):
             'prefetch_cache_name': self.field.attname,
         }
 
-        join_cols = self.field.get_joining_columns(reverse_join=True)[0]
+        if hasattr(self.field, "get_joining_fields"):
+            join_cols = tuple(
+                (lhs_field.column, rhs_field.column)
+                for lhs_field, rhs_field in self.field.get_joining_fields(
+                    reverse_join=True
+                )
+            )[0]
+        else:
+            join_cols = self.field.get_joining_columns(reverse_join=True)[0]
 
         ct_manager = ContentType.objects.db_manager(instance._state.db)
         content_type = ct_manager.get_for_model(instance, for_concrete_model=self.for_concrete_model)
