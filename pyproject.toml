@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Django model field that combines the functionality of GenericForeignKey and FileField"
 readme = "README.rst"
 license = { text = "BSD-2-Clause" }
-requires-python = ">=3"
+requires-python = ">=3.10"
 authors = [
     { name = "The Atlantic", email = "programmers@theatlantic.com" },
 ]
@@ -16,24 +16,17 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Web Environment",
     "Framework :: Django",
-    "Framework :: Django :: 2.2",
-    "Framework :: Django :: 3.2",
     "Framework :: Django :: 4.2",
     "Framework :: Django :: 5.0",
     "Framework :: Django :: 5.1",
     "Framework :: Django :: 5.2",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-dependencies = [
-    "python-monkey-business>=1.0.0",
-]
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/theatlantic/django-generic-plus"

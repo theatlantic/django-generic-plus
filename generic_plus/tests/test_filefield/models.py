@@ -75,6 +75,34 @@ class SecondTestGenericPlusModel(models.Model):
         app_label = "generic_plus"
 
 
+class TwoFieldGenericPlusModel(models.Model):
+
+    slug = models.SlugField()
+    file_one = TestField(upload_to="test", field_identifier="one")
+    file_two = TestField(upload_to="test", field_identifier="two")
+
+    class Meta:
+        app_label = "generic_plus"
+
+
+class TestNestedParent(models.Model):
+
+    slug = models.SlugField()
+
+    class Meta:
+        app_label = "generic_plus"
+
+
+class TestNestedChild(models.Model):
+
+    parent = models.ForeignKey(TestNestedParent, on_delete=models.CASCADE)
+    slug = models.SlugField()
+    test_file = TestField(upload_to="test")
+
+    class Meta:
+        app_label = "generic_plus"
+
+
 class OtherGenericRelatedModel(models.Model):
 
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
