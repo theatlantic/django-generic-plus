@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.core import checks
 
 
 class GenericPlusConfig(AppConfig):
@@ -7,7 +8,8 @@ class GenericPlusConfig(AppConfig):
     verbose_name = "Generic Plus"
 
     def ready(self):
-        from generic_plus.admin import append_inlines_to_registered_admins
+        from generic_plus.admin import (
+            append_inlines_to_registered_admins, check_admins_have_inlines)
         from generic_plus.models import patch_django
 
         # A no-op: generic_plus.models patches Django as it is imported, which
@@ -17,3 +19,4 @@ class GenericPlusConfig(AppConfig):
         patch_django()
 
         append_inlines_to_registered_admins()
+        checks.register(check_admins_have_inlines)

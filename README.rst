@@ -19,6 +19,21 @@ Requirements
 * Python 3.10+
 * Django 4.2, 5.0, 5.1, or 5.2
 
+Settings
+========
+
+``GENERIC_PLUS_AUTOPATCH_ADMIN`` (default ``True``)
+    django-generic-plus monkeypatches ``ModelAdmin``, ``InlineModelAdmin``,
+    and ``BaseModelAdmin`` so that every admin supports
+    ``GenericForeignFileField``. Set this to ``False`` to opt out, and add
+    ``generic_plus.admin.GenericPlusModelAdminMixin`` to the admin classes
+    whose models have a ``GenericForeignFileField``.
+
+    If ``GENERIC_PLUS_AUTOPATCH_ADMIN`` is ``False``, any ModelAdmin classes
+    which ought to have ``GenericPlusModelAdminMixin`` but do not will be
+    reported by the system check ``generic_plus.W001``.
+
+
 4.0 upgrade notes
 =================
 

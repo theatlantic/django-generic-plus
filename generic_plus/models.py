@@ -56,7 +56,7 @@ def patch_model_form():
 
 def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=None):
     from generic_plus.admin import (
-        append_generic_file_inlines, filter_generic_file_inlines)
+        append_generic_file_inlines, autopatch_applies, filter_generic_file_inlines)
     from generic_plus.fields import GenericForeignFileField
 
     if not BaseModelAdmin:
@@ -66,18 +66,17 @@ def patch_model_admin(BaseModelAdmin=None, ModelAdmin=None, InlineModelAdmin=Non
     if not InlineModelAdmin:
         from django.contrib.admin.options import InlineModelAdmin
 
-    # The inline is appended at construction time because django-nested-admin
-    # reads ``self.inlines`` when it builds its inline tree.
     @patch([ModelAdmin, InlineModelAdmin])
     def __init__(old_init, self, *args, **kwargs):
-        if isinstance(self, ModelAdmin):
-            model, admin_site = (args + (None, None))[0:2]
-            if not model:
-                model = kwargs.get('model')
-        else:
-            model = self.model
+        if autopatch_applies(self):
+            if isinstance(self, ModelAdmin):
+                model, admin_site = (args + (None, None))[0:2]
+                if not model:
+                    model = kwargs.get('model')
+            else:
+                model = self.model
 
-        append_generic_file_inlines(self, model)
+            append_generic_file_inlines(self, model)
 
         old_init(self, *args, **kwargs)
 
