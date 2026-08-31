@@ -1,4 +1,3 @@
-import django
 from django.apps import apps
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db import models
@@ -49,8 +48,6 @@ class GenericChoiceForeignKey(GenericForeignKey, models.Field):
         self.for_concrete_model = for_concrete_model
         self.ct_choices = ct_choices
         self.editable = True
-        if django.VERSION < (1, 9):
-            self.rel = None
         self.column = None
         models.Field.__init__(self, **kwargs)
 

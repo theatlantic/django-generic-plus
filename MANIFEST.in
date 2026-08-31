@@ -1,4 +1,3 @@
 include LICENSE
 include README.rst
-include README.md
 recursive-include generic_plus/templates *

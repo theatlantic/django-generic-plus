@@ -1,15 +1,15 @@
-import re
+import json
 
-import django
 from django.core.exceptions import ObjectDoesNotExist
 from django.forms.widgets import Input
 from django.conf import settings
 from django.contrib.admin import helpers
 from django.contrib.admin.sites import site
 from django.db.models.fields.files import FieldFile
+from django.middleware.csrf import get_token
 from django.template.loader import render_to_string
 
-from generic_plus.compat import compat_rel_to
+from generic_plus.utils import get_media_root, get_media_url
 
 
 class GenericForeignFileWidget(Input):
@@ -32,10 +32,7 @@ class GenericForeignFileWidget(Input):
         related = getattr(formfield, 'related', None)
         dbfield = getattr(related, 'field', None)
         file_field = getattr(dbfield, 'file_field', None)
-        if django.VERSION > (1, 9):
-            rel_model = getattr(getattr(dbfield, 'remote_field', None), 'model', None)
-        else:
-            rel_model = getattr(getattr(dbfield, 'rel', None), 'to', None)
+        rel_model = getattr(getattr(dbfield, 'remote_field', None), 'model', None)
 
         obj = None
         file_value = ''
@@ -57,7 +54,7 @@ class GenericForeignFileWidget(Input):
                     formset_prefix = bound_field.form.add_prefix(name)
                 generic_field = getattr(bound_field.db_file_field, 'generic_field', None)
                 if generic_field:
-                    pk_name = compat_rel_to(generic_field)._meta.pk.name
+                    pk_name = generic_field.remote_field.model._meta.pk.name
                 else:
                     pk_name = 'id'
                 value = bound_field.form.data.get("%s-0-%s" % (
@@ -77,8 +74,9 @@ class GenericForeignFileWidget(Input):
                 value = obj.pk
             except AttributeError:
                 obj = None
-        if file_value and file_value.startswith(settings.MEDIA_ROOT):
-            file_value = re.sub(r'^%s/?' % re.compile(settings.MEDIA_ROOT), '', file_value)
+        media_root = get_media_root()
+        if file_value and file_value.startswith(media_root):
+            file_value = file_value[len(media_root):].lstrip('/')
 
         if rel_model and isinstance(obj, rel_model) and not getattr(obj, self.field.rel_file_field_name) and file_value:
             setattr(obj, self.field.rel_file_field_name, file_value)
@@ -89,15 +87,35 @@ class GenericForeignFileWidget(Input):
         final_attrs['value'] = value or ''
 
         formset = self.get_inline_admin_formset(name, value, instance=obj, bound_field=bound_field)
+
+        upload_to = getattr(file_field, 'upload_to', '')
+        field_identifier = getattr(dbfield, 'field_identifier', None)
+        if field_identifier is None:
+            field_identifier = getattr(self.field, 'field_identifier', '')
+        request = getattr(self, 'request', None)
+        csrf_token = get_token(request) if request is not None else None
+
+        config = {
+            'uploadTo': upload_to if isinstance(upload_to, str) else '',
+            'mediaUrl': get_media_url(),
+            'fieldIdentifier': field_identifier,
+            'csrfToken': csrf_token,
+        }
+
         return {
             'instance': obj,
             'value': value,
-            'upload_to': getattr(file_field, 'upload_to', ''),
+            'upload_to': upload_to,
             'file_value': file_value,
             'inline_admin_formset': formset,
             'prefix': name,
             'media_url': settings.MEDIA_URL,
             'final_attrs': final_attrs,
+            'field_identifier': field_identifier,
+            'formset_prefix': name,
+            'csrf_token': csrf_token,
+            'config': config,
+            'config_json': json.dumps(config),
         }
 
     def render(self, name, value, attrs=None, bound_field=None):
@@ -160,7 +178,6 @@ class GenericForeignFileWidget(Input):
 
 
 def generic_fk_file_widget_factory(widget_cls=GenericForeignFileWidget, related=None, **attrs):
-    return type('GenericForeignFileWidget', (widget_cls,), attrs)
     widget_attrs = {
         '__module__': widget_cls.__module__,
         'related': related,

@@ -12,3 +12,7 @@ pip-log.txt
 /out
 .tox/
 .python-version
+.venv/
+venv*/
+.pytest_cache/
+.ruff_cache/

@@ -2,11 +2,10 @@
 Defines GenericForeignFileField, a subclass of GenericRelation from
 django.contrib.contenttypes.
 """
-from functools import reduce
+from functools import partial, reduce
 import itertools
 import operator
 
-import django
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import File
@@ -17,22 +16,20 @@ from django.db.models.fields.files import FieldFile, FileDescriptor
 from django.contrib.contenttypes.admin import GenericInlineModelAdmin
 from django.contrib.contenttypes.fields import GenericRelation, GenericRel
 
-from generic_plus.compat import compat_rel, compat_rel_to
 from generic_plus.forms import (
     generic_fk_file_formfield_factory, generic_fk_file_widget_factory)
 
-try:
-    from django.utils.functional import curry
-except ImportError:
-    # You can't trivially replace this with `functools.partial` because this binds
-    # to classes and returns bound instances, whereas functools.partial (on
-    # CPython) is a type and its instances don't bind.
-    def curry(_curried_func, *args, **kwargs):
-        def _curried(*moreargs, **morekwargs):
-            merged = dict(**kwargs)
-            merged.update(morekwargs)
-            return _curried_func(*(args + moreargs), **merged)
-        return _curried
+
+def get_related_file_name(obj, rel_file_field_name):
+    """
+    The name of the file held by ``obj``, a generic related object.
+
+    This is what belongs in the parent model's file column: a path relative to
+    the storage's location, as opposed to ``FieldFile.path``, which is absolute
+    and unavailable on remote storages.
+    """
+    file_field = getattr(obj, rel_file_field_name, None)
+    return file_field.name if file_field else None
 
 
 class GenericForeignFileField(GenericRelation):
@@ -97,7 +94,7 @@ class GenericForeignFileField(GenericRelation):
         self.missing_file_fallback = missing_file_fallback
 
         self.file_kwargs = {
-            'editable': (django.VERSION > (1, 10)),
+            'editable': True,
             'default': '',
             'blank': True,
             'upload_to': kwargs.pop('upload_to', None),
@@ -129,8 +126,7 @@ class GenericForeignFileField(GenericRelation):
             'max_length': self.file_kwargs['max_length'],
         })
 
-        if django.VERSION > (1, 9):
-            kwargs['on_delete'] = models.CASCADE
+        kwargs['on_delete'] = models.CASCADE
 
         super(GenericRelation, self).__init__(to,
             from_fields=[self.object_id_field_name], to_fields=[], **kwargs)
@@ -139,21 +135,6 @@ class GenericForeignFileField(GenericRelation):
 
     def get_cache_name(self):
         return self.name
-
-    def get_cached_value(self, instance, **kwargs):
-        cache_name = self.get_cache_name()
-        if django.VERSION > (2, 0):
-            return super(GenericForeignFileField, self).get_cached_value(
-                instance, **kwargs)
-        else:
-            return instance.__dict__[cache_name]
-
-    def set_cached_value(self, instance, value):
-        cache_name = self.get_cache_name()
-        if django.VERSION > (2, 0):
-            super(GenericForeignFileField, self).set_cached_value(instance, value)
-        else:
-            instance.__dict__[cache_name] = value
 
     def contribute_to_class(self, cls, name):
         self.generic_rel_name = '%s_generic_rel' % name
@@ -166,20 +147,20 @@ class GenericForeignFileField(GenericRelation):
         # Save a reference to which model this class is on for future use
         self.model = cls
 
-        super(GenericRelation, self).contribute_to_class(cls, name, **{
-            ('private_only' if django.VERSION > (1, 10) else 'virtual_only'): True,
-        })
+        super(GenericRelation, self).contribute_to_class(cls, name, private_only=True)
 
         self.column = self.file_kwargs['db_column']
 
-        if not isinstance(self.file_field_cls, models.ImageField):
+        # Model inheritance calls contribute_to_class() again with the same
+        # field, so this has to stay idempotent.
+        if not issubclass(self.file_field_cls, models.ImageField):
             self.file_kwargs.pop('width_field', None)
             self.file_kwargs.pop('height_field', None)
         else:
-            if not self.file_kwargs['width_field']:
-                del self.file_kwargs['width_field']
-            if not self.file_kwargs['height_field']:
-                del self.file_kwargs['height_field']
+            if not self.file_kwargs.get('width_field'):
+                self.file_kwargs.pop('width_field', None)
+            if not self.file_kwargs.get('height_field'):
+                self.file_kwargs.pop('height_field', None)
 
         self.__dict__['file_field'] = self.file_field_cls(name=name, **self.file_kwargs)
         ### HACK: manually fix creation counter
@@ -218,12 +199,7 @@ class GenericForeignFileField(GenericRelation):
         })
         setattr(cls, self.raw_file_field_name, self.file_descriptor_cls(self.file_field))
 
-    def is_cached(self, instance):
-        if django.VERSION > (2, 0):
-            return super(GenericForeignFileField, self).is_cached(instance)
-        else:
-            return hasattr(instance, self.get_cache_name())
-
+    # remove when floor is Django 5.0
     def get_prefetch_queryset(self, instances, queryset=None):
         if queryset is None:
             return self.get_prefetch_querysets(instances)
@@ -261,13 +237,15 @@ class GenericForeignFileField(GenericRelation):
                 rel_obj_attr,
                 get_ctype_obj_id,
                 True,
-                self.attname) + (() if django.VERSION < (2, 0) else (True,))
+                self.attname,
+                True)
 
         return (self.bulk_related_objects(instances),
             operator.attrgetter(self.object_id_field_name),
             lambda obj: obj._get_pk_val(),
             True,
-            self.attname) + (() if django.VERSION < (2, 0) else (True,))
+            self.attname,
+            True)
 
     def bulk_related_objects(self, *args, **kwargs):
         """
@@ -307,22 +285,30 @@ class GenericForeignFileField(GenericRelation):
             instance.save()
 
     def formfield(self, **kwargs):
-        factory_kwargs = {'related': compat_rel(self)}
+        factory_kwargs = {'related': self.remote_field}
         widget = kwargs.pop('widget', None) or generic_fk_file_widget_factory(**factory_kwargs)
         formfield = kwargs.pop('form_class', None) or generic_fk_file_formfield_factory(widget=widget, **factory_kwargs)
-        widget.parent_admin = formfield.parent_admin = kwargs.pop('parent_admin', None)
-        widget.request = formfield.request = kwargs.pop('request', None)
-        formfield.file_field_name = widget.file_field_name = self.file_field_name
+        parent_admin = kwargs.pop('parent_admin', None)
+        request = kwargs.pop('request', None)
 
         if isinstance(widget, type):
             widget = widget(field=self)
         else:
             widget.field = self
+
+        widget.parent_admin = parent_admin
+        widget.request = request
+        widget.file_field_name = self.file_field_name
+
         kwargs.update({
             'widget': widget,
             'form_class': formfield,
         })
-        return super(GenericForeignFileField, self).formfield(**kwargs)
+        form_field = super(GenericForeignFileField, self).formfield(**kwargs)
+        form_field.parent_admin = parent_admin
+        form_field.request = request
+        form_field.file_field_name = self.file_field_name
+        return form_field
 
     def get_inline_admin_formset(self, formset_cls=None, form_attrs=None, **kwargs):
         from generic_plus.forms import generic_fk_file_formset_factory, BaseGenericFileInlineFormSet
@@ -330,7 +316,7 @@ class GenericForeignFileField(GenericRelation):
         formset_cls = formset_cls or BaseGenericFileInlineFormSet
 
         attrs = {
-            'model': compat_rel_to(self),
+            'model': self.remote_field.model,
             'default_prefix': self.name,
             'field': self,
             'formset_kwargs': kwargs.pop('formset_kwargs', None) or {},
@@ -364,7 +350,7 @@ class GenericForeignFileField(GenericRelation):
                         formset_attrs=kwargs,
                         field=self.field,
                         prefix=self.default_prefix,
-                        formfield_callback=curry(self.formfield_for_dbfield, request=request),
+                        formfield_callback=partial(self.formfield_for_dbfield, request=request),
                         form_attrs=form_attrs)
                     if getattr(self, 'default_prefix', None):
                         formset.default_prefix = self.default_prefix
@@ -407,7 +393,7 @@ class GenericForeignFileDescriptor(object):
 
         # Dynamically create a class that subclasses the related model's
         # default manager.
-        rel_model = compat_rel_to(self.field)
+        rel_model = self.field.remote_field.model
         superclass = rel_model._default_manager.__class__
         RelatedManager = create_generic_related_manager(superclass)
 
@@ -425,6 +411,8 @@ class GenericForeignFileDescriptor(object):
                 )
             )[0]
         else:
+            # get_joining_fields() landed in Django 5.0; get_joining_columns()
+            # is deprecated as of 5.2. Remove when the floor is Django 5.0.
             join_cols = self.field.get_joining_columns(reverse_join=True)[0]
 
         ct_manager = ContentType.objects.db_manager(instance._state.db)
@@ -440,6 +428,7 @@ class GenericForeignFileDescriptor(object):
             content_type_field_name=self.field.content_type_field_name,
             object_id_field_name=self.field.object_id_field_name,
             field_identifier_field_name=self.field.field_identifier_field_name,
+            rel_file_field_name=self.field.rel_file_field_name,
             **manager_kwargs)
 
         if not manager.pk_val:
@@ -488,9 +477,9 @@ class GenericForeignFileDescriptor(object):
             instance.__dict__[self.file_field.name] = value
             return
 
-        if isinstance(obj, compat_rel_to(self.field)):
+        if isinstance(obj, self.field.remote_field.model):
             value = getattr(obj, self.field.rel_file_field_name)
-        elif isinstance(value, compat_rel_to(self.field)):
+        elif isinstance(value, self.field.remote_field.model):
             obj = value
             value = getattr(obj, self.field.rel_file_field_name)
 
@@ -520,28 +509,23 @@ class GenericForeignFileDescriptor(object):
         if instance is None:
             raise AttributeError("Manager must be accessed via instance")
 
-        if isinstance(value, compat_rel_to(self.field)) or value is None:
+        if not self.is_file_field:
+            # Django prohibits direct assignment to its related managers
+            # (TypeError since Django 2.0); this generic relation follows
+            # suit.
+            raise TypeError(
+                "Direct assignment to '%s_generic_rel' is prohibited. Assign "
+                "to the file field (instance.%s = ...) or use the manager's "
+                "add(), remove(), or clear() methods." % (
+                    self.field.file_field_name,
+                    self.field.file_field_name,
+                )
+            )
+
+        if isinstance(value, self.field.remote_field.model) or value is None:
             self.field.set_cached_value(instance, value)
 
-        if self.is_file_field:
-            self.set_file_value(instance, value)
-        else:
-            manager = self.__get__(instance)
-            manager.clear()
-            if value is None:
-                return
-            if isinstance(value, compat_rel_to(self.field)):
-                rel_obj_file = getattr(value, self.field.rel_file_field_name)
-                file_val = rel_obj_file.path if rel_obj_file else None
-                setattr(instance, self.field.file_field_name, file_val)
-                manager.add(value)
-            else:
-                for obj in value:
-                    field_value = getattr(obj, self.field.file_field_name)
-                    file_val = field_value.path if field_value else None
-                    setattr(instance, self.field.file_field_name, file_val)
-                    manager.add(obj)
-                self.field.set_cached_value(instance, value)
+        self.set_file_value(instance, value)
 
 
 def create_generic_related_manager(superclass):
@@ -556,7 +540,8 @@ def create_generic_related_manager(superclass):
                      source_col_name=None, target_col_name=None, content_type=None,
                      content_type_field_name=None, object_id_field_name=None,
                      prefetch_cache_name=None,
-                     field_identifier_field_name=None, **kwargs):
+                     field_identifier_field_name=None, rel_file_field_name=None,
+                     **kwargs):
             super(GenericRelatedObjectManager, self).__init__()
             self.model = model
             self.content_type = content_type
@@ -564,6 +549,7 @@ def create_generic_related_manager(superclass):
             self.instance = instance
             self._field = kwargs.pop('field', None)
             self.file_field_name = self._field.file_field_name
+            self.rel_file_field_name = rel_file_field_name or self._field.rel_file_field_name
             self.core_filters = {
                 '%s__pk' % content_type_field_name: content_type.id,
                 '%s__exact' % object_id_field_name: instance._get_pk_val(),
@@ -576,7 +562,16 @@ def create_generic_related_manager(superclass):
             self.target_col_name = target_col_name
             self.content_type_field_name = content_type_field_name
             self.object_id_field_name = object_id_field_name
+            self.field_identifier_field_name = field_identifier_field_name
             self.pk_val = self.instance._get_pk_val()
+
+        def _field_identifier_query(self):
+            if not self.field_identifier_field_name:
+                return {}
+            return {
+                '%s__exact' % self.field_identifier_field_name: getattr(
+                    self._field, self.field_identifier_field_name),
+            }
 
         def get_queryset(self):
             try:
@@ -588,20 +583,34 @@ def create_generic_related_manager(superclass):
                 ('%s__pk' % self.content_type_field_name): self.content_type.id,
                 ('%s__exact' % self.object_id_field_name): self.pk_val,
             }
+            query.update(self._field_identifier_query())
             return superclass.get_queryset(self).using(db).filter(**query)
 
+        # remove when floor is Django 5.0
         def get_prefetch_queryset(self, instances, queryset=None):
+            if queryset is None:
+                return self.get_prefetch_querysets(instances)
+            return self.get_prefetch_querysets(instances, [queryset])
+
+        def get_prefetch_querysets(self, instances, querysets=None):
+            if querysets is not None:
+                raise Exception(
+                    "Passing querysets in generic_plus get_prefetch_querysets is "
+                    "not yet supported"
+                )
             db = self._db or router.db_for_read(self.model, instance=instances[0])
             query = {
                 ('%s__pk' % self.content_type_field_name): self.content_type.id,
                 ('%s__in' % self.object_id_field_name): set(obj._get_pk_val() for obj in instances),
             }
+            query.update(self._field_identifier_query())
             qs = super(GenericRelatedObjectManager, self).get_queryset()
             return (qs.using(db).filter(**query),
                     operator.attrgetter(self.object_id_field_name),
                     lambda obj: obj._get_pk_val(),
                     False,
-                    self.prefetch_cache_name) + (() if django.VERSION < (2, 0) else (False,))
+                    self.prefetch_cache_name,
+                    False)
 
         def add(self, *objs):
             for obj in objs:
@@ -611,7 +620,8 @@ def create_generic_related_manager(superclass):
                 setattr(obj, self.object_id_field_name, self.pk_val)
                 obj.save()
                 related_obj = self.__get_related_obj()
-                setattr(related_obj, self.file_field_name, obj.path)
+                setattr(related_obj, self.file_field_name,
+                        get_related_file_name(obj, self.rel_file_field_name))
         add.alters_data = True
 
         @property
@@ -650,9 +660,10 @@ def create_generic_related_manager(superclass):
             db = router.db_for_write(self.model, instance=self.instance)
             super_ = super(GenericRelatedObjectManager, self).using(db)
             new_obj = super_.create(**kwargs)
-            if new_obj.path:
+            file_value = get_related_file_name(new_obj, self.rel_file_field_name)
+            if file_value:
                 related_obj = self.__get_related_obj()
-                setattr(related_obj, self.file_field_name, new_obj.path)
+                setattr(related_obj, self.file_field_name, file_value)
             return new_obj
         create.alters_data = True
 

@@ -1,4 +1,3 @@
-import django
 from django import forms
 from django.contrib.admin.widgets import AdminFileWidget
 from django.contrib.contenttypes.forms import BaseGenericInlineFormSet
@@ -10,12 +9,9 @@ from django.db.models.fields.files import FieldFile
 from django.forms.boundfield import BoundField
 from django.forms.formsets import TOTAL_FORM_COUNT, DEFAULT_MAX_NUM
 from django.forms.models import modelform_factory, ModelFormMetaclass
+from django.forms.renderers import get_default_renderer
 from django.utils.encoding import force_str
 from django.utils.translation import ngettext
-try:
-    from django.forms.renderers import get_default_renderer
-except ImportError:
-    get_default_renderer = None
 
 from .widgets import generic_fk_file_widget_factory, GenericForeignFileWidget
 
@@ -89,7 +85,9 @@ class GenericForeignFileFormField(forms.Field):
         widget_kwargs = kwargs.pop('widget_kwargs', None) or {}
         widget = kwargs.pop('widget', None)
         if isinstance(widget, type):
-            if not issubclass(GenericForeignFileWidget):
+            if issubclass(widget, GenericForeignFileWidget):
+                widget = widget(field=self, **widget_kwargs)
+            else:
                 widget = GenericForeignFileWidget(field=self, **widget_kwargs)
         elif not isinstance(widget, GenericForeignFileWidget):
             widget = GenericForeignFileWidget(field=self, **widget_kwargs)
@@ -499,8 +497,7 @@ def generic_fk_file_formset_factory(
         'validate_min': validate_min,
         'can_delete_extra': can_delete_extra,
     }
-    if get_default_renderer is not None:
-        inline_formset_attrs["renderer"] = renderer or get_default_renderer()
+    inline_formset_attrs["renderer"] = renderer or get_default_renderer()
 
     if field.field_identifier_field_name:
         field_identifier = getattr(field, field.field_identifier_field_name)
